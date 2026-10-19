@@ -82,6 +82,11 @@ pub struct ErrorResponse {
     pub error: String,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct HintsResponse {
+    pub hints: Vec<runtime::copilot::Hint>,
+}
+
 pub fn app(state: AppState) -> Router {
     let mut router = Router::new()
         .route("/api/health", get(health_handler))
@@ -89,7 +94,8 @@ pub fn app(state: AppState) -> Router {
         .route("/api/validate", post(validate_handler))
         .route("/api/execute", post(execute_handler))
         .route("/api/export", post(export_handler))
-        .route("/api/export/disk", post(export_disk_handler));
+        .route("/api/export/disk", post(export_disk_handler))
+        .route("/api/copilot/hints", post(copilot_hints_handler));
 
     if Path::new("ui/dist").exists() {
         router = router.fallback_service(ServeDir::new("ui/dist"));
@@ -246,3 +252,12 @@ async fn export_disk_handler(
         )),
     }
 }
+
+async fn copilot_hints_handler(
+    State(state): State<AppState>,
+    Json(graph): Json<GraphSpec>,
+) -> Json<HintsResponse> {
+    let hints = runtime::copilot::generate_hints(&graph, &state.registry);
+    Json(HintsResponse { hints })
+}
+
