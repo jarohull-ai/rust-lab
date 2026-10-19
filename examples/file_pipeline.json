@@ -1,0 +1,54 @@
+{
+  "graph_version": "0.1",
+  "nodes": [
+    {
+      "id": "read",
+      "kind": "fs_read",
+      "config": {
+        "path": "data/sample.txt"
+      }
+    },
+    {
+      "id": "clean",
+      "kind": "text_clean",
+      "config": {
+        "remove_extra_whitespace": true,
+        "to_upper": true
+      }
+    },
+    {
+      "id": "out_path",
+      "kind": "string_to_path",
+      "config": {
+        "path": "data/output.txt"
+      }
+    },
+    {
+      "id": "write",
+      "kind": "fs_write",
+      "config": {}
+    },
+    {
+      "id": "logger",
+      "kind": "log_output",
+      "config": {
+        "text": "Plik został pomyślnie przetworzony i zapisany do data/output.txt!"
+      },
+      "after": ["write"]
+    }
+  ],
+  "edges": [
+    {
+      "from": { "node": "read", "port": "content" },
+      "to": { "node": "clean", "port": "text" }
+    },
+    {
+      "from": { "node": "clean", "port": "cleaned" },
+      "to": { "node": "write", "port": "content" }
+    },
+    {
+      "from": { "node": "out_path", "port": "path" },
+      "to": { "node": "write", "port": "path" }
+    }
+  ]
+}

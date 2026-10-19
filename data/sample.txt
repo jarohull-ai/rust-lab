@@ -1,0 +1,1 @@
+   Witaj w Rust Lab!    To jest przykładowy tekst do przetworzenia w potoku danych.   
