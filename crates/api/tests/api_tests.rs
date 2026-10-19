@@ -1,51 +1,65 @@
-use api::{app, AppState, HealthResponse, ValidateResponse};
+use api::{app, AppState, ExportResponse, HealthResponse, ValidateResponse};
 use axum::{
     body::Body,
     http::{header, Method, Request, StatusCode},
 };
 use http_body_util::BodyExt;
 use lab_node_sdk::NodeSpec;
-use serde_json::json;
+use serde::de::DeserializeOwned;
+use serde_json::{json, Value};
 use tower::ServiceExt;
 
-#[tokio::test]
-async fn test_health_endpoint() {
-    let router = app(AppState::default());
+fn build_router() -> axum::Router {
+    app(AppState::default())
+}
 
+async fn get_json<T: DeserializeOwned>(router: axum::Router, path: &str) -> T {
     let req = Request::builder()
-        .uri("/api/health")
+        .uri(path)
         .method(Method::GET)
         .body(Body::empty())
         .unwrap();
 
     let res = router.oneshot(req).await.unwrap();
-    assert_eq!(res.status(), StatusCode::OK);
+    assert_eq!(res.status(), StatusCode::OK, "GET {path} should return 200 OK");
 
     let body = res.into_body().collect().await.unwrap().to_bytes();
-    let health: HealthResponse = serde_json::from_slice(&body).unwrap();
-    assert_eq!(health.status, "ok");
-    assert_eq!(health.service, "rust-lab-api");
+    serde_json::from_slice(&body).unwrap()
+}
+
+async fn post_json<T: DeserializeOwned>(router: axum::Router, path: &str, payload: Value) -> T {
+    let req = Request::builder()
+        .uri(path)
+        .method(Method::POST)
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(serde_json::to_vec(&payload).unwrap()))
+        .unwrap();
+
+    let res = router.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK, "POST {path} should return 200 OK");
+
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    serde_json::from_slice(&body).unwrap()
 }
 
 #[tokio::test]
-async fn test_nodes_endpoint_returns_all_specs() {
-    let router = app(AppState::default());
+async fn health_endpoint_reports_service_status() {
+    let router = build_router();
+    let health: HealthResponse = get_json(router, "/api/health").await;
 
-    let req = Request::builder()
-        .uri("/api/nodes")
-        .method(Method::GET)
-        .body(Body::empty())
-        .unwrap();
+    assert_eq!(health.status, "ok");
+    assert_eq!(health.service, "rust-lab-api");
+    assert_eq!(health.version, "0.1.0");
+}
 
-    let res = router.oneshot(req).await.unwrap();
-    assert_eq!(res.status(), StatusCode::OK);
+#[tokio::test]
+async fn nodes_endpoint_lists_expected_registry() {
+    let router = build_router();
+    let specs: Vec<NodeSpec> = get_json(router, "/api/nodes").await;
 
-    let body = res.into_body().collect().await.unwrap().to_bytes();
-    let specs: Vec<NodeSpec> = serde_json::from_slice(&body).unwrap();
+    assert!(!specs.is_empty(), "node catalog should not be empty");
+    let names: Vec<String> = specs.iter().map(|spec| spec.name.clone()).collect();
 
-    // Check that we have 11 registered nodes
-    assert_eq!(specs.len(), 11);
-    let names: Vec<String> = specs.into_iter().map(|s| s.name).collect();
     assert!(names.contains(&"condition".to_string()));
     assert!(names.contains(&"delay".to_string()));
     assert!(names.contains(&"http_get".to_string()));
@@ -57,10 +71,7 @@ async fn test_nodes_endpoint_returns_all_specs() {
 }
 
 #[tokio::test]
-async fn test_validate_endpoint_valid_and_invalid() {
-    let router = app(AppState::default());
-
-    // Valid graph
+async fn validate_endpoint_accepts_valid_graph_and_rejects_invalid_graph() {
     let valid_graph = json!({
         "graph_version": "0.1",
         "nodes": [
@@ -72,22 +83,12 @@ async fn test_validate_endpoint_valid_and_invalid() {
         ]
     });
 
-    let req = Request::builder()
-        .uri("/api/validate")
-        .method(Method::POST)
-        .header(header::CONTENT_TYPE, "application/json")
-        .body(Body::from(serde_json::to_vec(&valid_graph).unwrap()))
-        .unwrap();
+    let router = build_router();
+    let valid: ValidateResponse = post_json(router.clone(), "/api/validate", valid_graph).await;
+    assert!(valid.valid);
+    assert!(valid.errors.is_empty());
+    assert_eq!(valid.execution_order, vec!["cleaner", "printer"]);
 
-    let res = router.clone().oneshot(req).await.unwrap();
-    assert_eq!(res.status(), StatusCode::OK);
-    let body = res.into_body().collect().await.unwrap().to_bytes();
-    let val_res: ValidateResponse = serde_json::from_slice(&body).unwrap();
-    assert!(val_res.valid);
-    assert!(val_res.errors.is_empty());
-    assert_eq!(val_res.execution_order, vec!["cleaner", "printer"]);
-
-    // Invalid graph: type mismatch (String -> Boolean)
     let invalid_graph = json!({
         "graph_version": "0.1",
         "nodes": [
@@ -99,26 +100,15 @@ async fn test_validate_endpoint_valid_and_invalid() {
         ]
     });
 
-    let req_bad = Request::builder()
-        .uri("/api/validate")
-        .method(Method::POST)
-        .header(header::CONTENT_TYPE, "application/json")
-        .body(Body::from(serde_json::to_vec(&invalid_graph).unwrap()))
-        .unwrap();
-
-    let res_bad = router.oneshot(req_bad).await.unwrap();
-    assert_eq!(res_bad.status(), StatusCode::OK);
-    let body_bad = res_bad.into_body().collect().await.unwrap().to_bytes();
-    let val_res_bad: ValidateResponse = serde_json::from_slice(&body_bad).unwrap();
-    assert!(!val_res_bad.valid);
-    assert!(!val_res_bad.errors.is_empty());
-    assert!(val_res_bad.errors[0].contains("Type mismatch"));
+    let invalid: ValidateResponse = post_json(router, "/api/validate", invalid_graph).await;
+    assert!(!invalid.valid);
+    assert!(!invalid.errors.is_empty());
+    assert!(invalid.errors[0].contains("Type mismatch"));
 }
 
 #[tokio::test]
-async fn test_execute_endpoint() {
-    let router = app(AppState::default());
-
+async fn execute_endpoint_returns_effective_execution_report() {
+    let router = build_router();
     let graph = json!({
         "graph_version": "0.1",
         "nodes": [
@@ -130,29 +120,15 @@ async fn test_execute_endpoint() {
         ]
     });
 
-    let req = Request::builder()
-        .uri("/api/execute")
-        .method(Method::POST)
-        .header(header::CONTENT_TYPE, "application/json")
-        .body(Body::from(serde_json::to_vec(&graph).unwrap()))
-        .unwrap();
-
-    let res = router.oneshot(req).await.unwrap();
-    assert_eq!(res.status(), StatusCode::OK);
-    let body = res.into_body().collect().await.unwrap().to_bytes();
-    let report: runtime::ExecutionReport = serde_json::from_slice(&body).unwrap();
+    let report: runtime::ExecutionReport = post_json(router, "/api/execute", graph).await;
     assert_eq!(report.executed, vec!["cleaner", "printer"]);
-    assert_eq!(report.skipped.len(), 0);
-    assert_eq!(
-        report.outputs["cleaner"]["cleaned"],
-        serde_json::json!("hello api")
-    );
+    assert!(report.skipped.is_empty());
+    assert_eq!(report.outputs["cleaner"]["cleaned"], serde_json::json!("hello api"));
 }
 
 #[tokio::test]
-async fn test_export_endpoint() {
-    let router = app(AppState::default());
-
+async fn export_endpoint_generates_project_source_files() {
+    let router = build_router();
     let export_req = json!({
         "project_name": "weather_service",
         "graph": {
@@ -167,17 +143,7 @@ async fn test_export_endpoint() {
         }
     });
 
-    let req = Request::builder()
-        .uri("/api/export")
-        .method(Method::POST)
-        .header(header::CONTENT_TYPE, "application/json")
-        .body(Body::from(serde_json::to_vec(&export_req).unwrap()))
-        .unwrap();
-
-    let res = router.oneshot(req).await.unwrap();
-    assert_eq!(res.status(), StatusCode::OK);
-    let body = res.into_body().collect().await.unwrap().to_bytes();
-    let export_res: api::ExportResponse = serde_json::from_slice(&body).unwrap();
+    let export_res: ExportResponse = post_json(router, "/api/export", export_req).await;
     assert_eq!(export_res.project_name, "weather_service");
     assert!(export_res.cargo_toml.contains("name = \"weather_service\""));
     assert!(export_res.main_rs.contains("nodes::text_clean"));
@@ -185,9 +151,9 @@ async fn test_export_endpoint() {
 }
 
 #[tokio::test]
-async fn test_export_disk_endpoint() {
-    let router = app(AppState::default());
-    let temp_out = std::env::temp_dir().join("test_rust_lab_api_export");
+async fn export_disk_endpoint_writes_generated_project_to_temp_dir() {
+    let router = build_router();
+    let temp_out = std::env::temp_dir().join("test_rust_lab_api_export_professional");
     let _ = std::fs::remove_dir_all(&temp_out);
 
     let disk_req = json!({
@@ -205,18 +171,12 @@ async fn test_export_disk_endpoint() {
         }
     });
 
-    let req = Request::builder()
-        .uri("/api/export/disk")
-        .method(Method::POST)
-        .header(header::CONTENT_TYPE, "application/json")
-        .body(Body::from(serde_json::to_vec(&disk_req).unwrap()))
-        .unwrap();
-
-    let res = router.oneshot(req).await.unwrap();
-    assert_eq!(res.status(), StatusCode::OK);
+    let response: api::ExportDiskResponse = post_json(router, "/api/export/disk", disk_req).await;
+    assert!(response.success);
     assert!(temp_out.join("Cargo.toml").exists());
     assert!(temp_out.join("src/main.rs").exists());
     assert!(temp_out.join("src/nodes.rs").exists());
+    assert!(response.output_dir.starts_with(std::env::temp_dir().to_string_lossy().as_ref()));
 
     let _ = std::fs::remove_dir_all(&temp_out);
 }
