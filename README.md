@@ -11,7 +11,7 @@ Rust Lab is a standalone learning environment for building typed data-flow graph
 - Strict typed pins with explicit converter nodes.
 - Construction Mode exports a standalone Cargo project.
 - React Flow canvas with a generated Rust code view and execution diagnostics.
-- SEED Tutor provides deterministic, offline, explainable learning hints without an LLM.
+- SEED Tutor provides adaptive, deterministic learning hints without an LLM.
 
 ## Workspace
 
@@ -44,7 +44,7 @@ rust-lab/
 
 ## SEED Tutor
 
-The tutor analyzes the graph in real time and returns structured hint codes rather than localized backend sentences. The UI renders the complete hint in the selected language.
+The tutor analyzes the graph in real time and returns structured hint codes rather than localized backend sentences. The UI renders the complete hint in the selected language. The published `seed-core` crate supplies a small local concept memory; Rust Lab adds the educational rules around it.
 
 Current checks include:
 
@@ -55,7 +55,13 @@ Current checks include:
 5. Invalid input and output ports.
 6. Useful next-node suggestions for unconsumed outputs.
 
-Each hint includes the related Rust concept, an explanation, a suggested next action, and an optional node focus action.
+Hints adapt to repeated attempts:
+
+1. First occurrence: a short nudge.
+2. Second occurrence after a graph edit: an explanation of the Rust concept.
+3. Third occurrence: a concrete solution.
+
+Resolving the issue marks its concept as learned. Progress stays in the browser's local storage and can be reset from the tutor panel. Refreshing the same graph does not count as another attempt.
 
 ## Run the application
 

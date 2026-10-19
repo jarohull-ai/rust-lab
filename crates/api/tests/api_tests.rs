@@ -209,7 +209,14 @@ async fn tutor_hints_endpoint_returns_structured_contextual_hints() {
         .uri("/api/tutor/hints")
         .method(Method::POST)
         .header(header::CONTENT_TYPE, "application/json")
-        .body(Body::from(serde_json::to_vec(&graph).unwrap()))
+        .body(Body::from(
+            serde_json::to_vec(&json!({
+                "graph": graph,
+                "progress": {},
+                "revision": "first-edit"
+            }))
+            .unwrap(),
+        ))
         .unwrap();
 
     let res = router.oneshot(req).await.unwrap();
@@ -221,6 +228,11 @@ async fn tutor_hints_endpoint_returns_structured_contextual_hints() {
         hint.code == runtime::HintCode::MissingRequiredInput
             && hint.params.get("pin").is_some_and(|pin| pin == "url")
     }));
+    assert!(hints_resp
+        .hints
+        .iter()
+        .all(|hint| hint.level == runtime::AdviceLevel::Nudge));
+    assert_eq!(hints_resp.progress.revision.as_deref(), Some("first-edit"));
 }
 
 #[tokio::test]
@@ -234,11 +246,11 @@ async fn runtime_rejects_http_get_to_evil_domain() {
     });
     let mut registry = runtime::NodeRegistry::new();
     runtime::nodes::register_all(&mut registry);
-    let policy = runtime::SeedPolicy::default_safe();
+    let policy = runtime::ExecutionPolicy::default_safe();
     let result = runtime::executor::execute_graph(&graph, &registry, &policy).await;
     assert!(result.is_err());
     let err = result.unwrap_err().to_string();
-    assert!(err.contains("SEED Veto"), "{err}");
+    assert!(err.contains("Execution policy denied"), "{err}");
     assert!(err.contains("http_get.domain_allowlist"), "{err}");
 }
 
@@ -253,15 +265,15 @@ async fn runtime_allows_http_get_to_httpbin() {
     });
     let mut registry = runtime::NodeRegistry::new();
     runtime::nodes::register_all(&mut registry);
-    let policy = runtime::SeedPolicy::default_safe();
+    let policy = runtime::ExecutionPolicy::default_safe();
     let spec: lab_node_sdk::GraphSpec = serde_json::from_value(graph).unwrap();
     let executor = runtime::Executor::new(registry);
     let res = executor.execute_with_policy(spec, &policy).await;
     if let Err(e) = res {
         let err_str = e.to_string();
         assert!(
-            !err_str.contains("SEED Veto"),
-            "Should not be vetoed by SEED: {err_str}"
+            !err_str.contains("Execution policy denied"),
+            "The execution policy should allow the configured domain: {err_str}"
         );
     }
 }

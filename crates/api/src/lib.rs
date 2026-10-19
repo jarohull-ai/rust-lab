@@ -83,6 +83,24 @@ pub struct ErrorResponse {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HintsResponse {
     pub hints: Vec<runtime::tutor::Hint>,
+    pub progress: runtime::TutorProgress,
+    pub learned_now: Vec<runtime::HintConcept>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AdaptiveHintsRequest {
+    pub graph: GraphSpec,
+    #[serde(default)]
+    pub progress: runtime::TutorProgress,
+    #[serde(default)]
+    pub revision: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum HintsRequest {
+    Adaptive(AdaptiveHintsRequest),
+    Graph(GraphSpec),
 }
 
 pub fn app(state: AppState) -> Router {
@@ -256,8 +274,26 @@ async fn export_disk_handler(
 
 async fn tutor_hints_handler(
     State(state): State<AppState>,
-    Json(graph): Json<GraphSpec>,
+    Json(request): Json<HintsRequest>,
 ) -> Json<HintsResponse> {
-    let hints = runtime::tutor::generate_hints(&graph, &state.registry);
-    Json(HintsResponse { hints })
+    let (graph, progress, revision) = match request {
+        HintsRequest::Adaptive(payload) => {
+            let revision = if payload.revision.is_empty() {
+                serde_json::to_string(&payload.graph).unwrap_or_default()
+            } else {
+                payload.revision
+            };
+            (payload.graph, payload.progress, revision)
+        }
+        HintsRequest::Graph(graph) => {
+            let revision = serde_json::to_string(&graph).unwrap_or_default();
+            (graph, runtime::TutorProgress::default(), revision)
+        }
+    };
+    let outcome = runtime::tutor::tutor_outcome(&graph, &state.registry, progress, revision);
+    Json(HintsResponse {
+        hints: outcome.hints,
+        progress: outcome.progress,
+        learned_now: outcome.learned_now,
+    })
 }

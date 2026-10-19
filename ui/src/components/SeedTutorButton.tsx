@@ -1,16 +1,62 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { AlertTriangle, ArrowRight, Info, Lightbulb, Sparkles, X, XCircle } from 'lucide-react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  AlertTriangle,
+  ArrowRight,
+  CheckCircle2,
+  Info,
+  Lightbulb,
+  RotateCcw,
+  Sparkles,
+  X,
+  XCircle,
+} from 'lucide-react';
 import { useI18n } from '../i18n';
 import { GraphSpec } from '../types';
 
 export interface TutorHint {
+  id: string;
   code: string;
   severity: 'info' | 'warning' | 'error';
   concept: string;
+  level: 'nudge' | 'explain' | 'solution';
+  attempts: number;
   params?: Record<string, string>;
   node_id?: string;
   suggestion?: string;
 }
+
+interface TutorProgress {
+  attempts: Record<string, number>;
+  active: Record<string, string>;
+  learned: string[];
+  revision?: string;
+}
+
+interface TutorResponse {
+  hints: TutorHint[];
+  progress: TutorProgress;
+  learned_now: string[];
+}
+
+const PROGRESS_KEY = 'rust-lab.seed-tutor.progress';
+
+const emptyProgress = (): TutorProgress => ({ attempts: {}, active: {}, learned: [] });
+
+const loadProgress = (): TutorProgress => {
+  try {
+    const value = window.localStorage.getItem(PROGRESS_KEY);
+    if (!value) return emptyProgress();
+    const parsed = JSON.parse(value) as Partial<TutorProgress>;
+    return {
+      attempts: parsed.attempts ?? {},
+      active: parsed.active ?? {},
+      learned: Array.isArray(parsed.learned) ? parsed.learned : [],
+      revision: parsed.revision,
+    };
+  } catch {
+    return emptyProgress();
+  }
+};
 
 interface SeedTutorButtonProps {
   graph: GraphSpec;
@@ -20,27 +66,47 @@ interface SeedTutorButtonProps {
 export const SeedTutorButton: React.FC<SeedTutorButtonProps> = ({ graph, onFocusNode }) => {
   const { t } = useI18n();
   const [hints, setHints] = useState<TutorHint[]>([]);
+  const [progress, setProgress] = useState<TutorProgress>(loadProgress);
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const progressRef = useRef(progress);
+  const requestIdRef = useRef(0);
 
   const fetchHints = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
     setIsLoading(true);
     try {
       const response = await fetch('/api/tutor/hints', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(graph),
+        body: JSON.stringify({
+          graph,
+          progress: progressRef.current,
+          revision: JSON.stringify(graph),
+        }),
       });
       if (response.ok) {
-        const data = await response.json();
+        const data = (await response.json()) as TutorResponse;
+        if (requestId !== requestIdRef.current) return;
         setHints(data.hints || []);
+        progressRef.current = data.progress ?? emptyProgress();
+        setProgress(progressRef.current);
+        window.localStorage.setItem(PROGRESS_KEY, JSON.stringify(progressRef.current));
       }
     } catch (error) {
       console.error('Failed to fetch SEED Tutor hints:', error);
     } finally {
-      setIsLoading(false);
+      if (requestId === requestIdRef.current) setIsLoading(false);
     }
   }, [graph]);
+
+  const resetProgress = useCallback(() => {
+    const next = emptyProgress();
+    progressRef.current = next;
+    setProgress(next);
+    window.localStorage.removeItem(PROGRESS_KEY);
+    void fetchHints();
+  }, [fetchHints]);
 
   useEffect(() => {
     const timer = setTimeout(fetchHints, 300);
@@ -92,13 +158,22 @@ export const SeedTutorButton: React.FC<SeedTutorButtonProps> = ({ graph, onFocus
               <Sparkles className="w-4 h-4 text-yellow-400" />
               <span className="font-semibold text-xs tracking-wide text-slate-100">{t('tutor.title')}</span>
             </div>
-            <button
-              onClick={() => setIsOpen(false)}
-              title={t('tutor.close')}
-              className="p-1 rounded text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-colors"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={resetProgress}
+                title={t('tutor.reset')}
+                className="p-1 rounded text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-colors"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => setIsOpen(false)}
+                title={t('tutor.close')}
+                className="p-1 rounded text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-colors"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
 
           <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
@@ -113,9 +188,11 @@ export const SeedTutorButton: React.FC<SeedTutorButtonProps> = ({ graph, onFocus
                 const isError = hint.severity === 'error';
                 const isWarning = hint.severity === 'warning';
                 const params = hint.params ?? {};
+                const showConcept = hint.level !== 'nudge';
+                const showSolution = hint.level === 'solution';
                 return (
                   <div
-                    key={`${hint.code}-${hint.node_id ?? 'graph'}-${index}`}
+                    key={`${hint.id}-${index}`}
                     className={`p-2.5 rounded-lg border text-xs transition-all ${
                       isError
                         ? 'bg-rose-950/25 border-rose-800/60 text-rose-200'
@@ -131,13 +208,21 @@ export const SeedTutorButton: React.FC<SeedTutorButtonProps> = ({ graph, onFocus
                         {!isError && !isWarning && <Info className="w-4 h-4 text-cyan-400 shrink-0" />}
                       </div>
                       <div className="flex-1 min-w-0">
+                        <span className="inline-flex mb-1 text-[9px] uppercase tracking-wider font-bold text-slate-400">
+                          {t(`tutor.level.${hint.level}`, { attempt: hint.attempts })}
+                        </span>
                         <div className="font-medium text-slate-100 leading-snug">
                           {t(`hint.message.${hint.code}`, params)}
                         </div>
-                        <div className="mt-1 text-[10px] text-slate-500">
-                          {t('tutor.concept', { concept: t(`hint.concept.${hint.concept}`) })}
-                        </div>
-                        {hint.suggestion && (
+                        {showConcept && (
+                          <div className="mt-1.5 text-[10px] text-slate-400 space-y-1">
+                            <div>{t('tutor.concept', { concept: t(`hint.concept.${hint.concept}`) })}</div>
+                            <div className="text-slate-500 leading-relaxed">
+                              {t(`hint.explanation.${hint.concept}`)}
+                            </div>
+                          </div>
+                        )}
+                        {showSolution && hint.suggestion && (
                           <div className="mt-1.5 text-[11px] text-slate-400 bg-slate-950/70 p-1.5 rounded border border-slate-800 flex items-start gap-1.5">
                             <ArrowRight className="w-3 h-3 text-yellow-400 shrink-0 mt-0.5" />
                             <span>{t(`hint.suggestion.${hint.suggestion}`, params)}</span>
@@ -156,6 +241,25 @@ export const SeedTutorButton: React.FC<SeedTutorButtonProps> = ({ graph, onFocus
                   </div>
                 );
               })
+            )}
+
+            {progress.learned.length > 0 && (
+              <div className="p-2.5 rounded-lg border border-emerald-800/60 bg-emerald-950/20">
+                <div className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-300">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  {t('tutor.learned.title')}
+                </div>
+                <div className="mt-1.5 flex flex-wrap gap-1">
+                  {progress.learned.map((concept) => (
+                    <span
+                      key={concept}
+                      className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-900/50 text-emerald-200 border border-emerald-800/60"
+                    >
+                      {t(`hint.concept.${concept}`)}
+                    </span>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
 

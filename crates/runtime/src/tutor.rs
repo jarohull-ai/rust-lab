@@ -7,8 +7,10 @@
 use crate::plan;
 use crate::registry::NodeRegistry;
 use lab_node_sdk::{GraphSpec, PinType};
+use seed_core::KnowledgeStore;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::sync::OnceLock;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -16,6 +18,14 @@ pub enum HintSeverity {
     Info,
     Warning,
     Error,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum AdviceLevel {
+    Nudge,
+    Explain,
+    Solution,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -31,7 +41,7 @@ pub enum HintCode {
     TypeMismatch,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum HintConcept {
     GraphStructure,
@@ -68,15 +78,107 @@ pub enum HintSuggestion {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Hint {
+    pub id: String,
     pub code: HintCode,
     pub severity: HintSeverity,
     pub concept: HintConcept,
+    pub level: AdviceLevel,
+    pub attempts: u32,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub params: BTreeMap<String, String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub node_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub suggestion: Option<HintSuggestion>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TutorProgress {
+    #[serde(default)]
+    pub attempts: BTreeMap<String, u32>,
+    #[serde(default)]
+    pub active: BTreeMap<String, HintConcept>,
+    #[serde(default)]
+    pub learned: BTreeSet<HintConcept>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub revision: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TutorOutcome {
+    pub hints: Vec<Hint>,
+    pub progress: TutorProgress,
+    pub learned_now: Vec<HintConcept>,
+}
+
+fn concept_key(concept: HintConcept) -> &'static str {
+    match concept {
+        HintConcept::GraphStructure => "graph_structure",
+        HintConcept::NodeInterfaces => "node_interfaces",
+        HintConcept::RequiredInputs => "required_inputs",
+        HintConcept::DataFlow => "data_flow",
+        HintConcept::ExplicitTypes => "explicit_types",
+    }
+}
+
+fn concept_vector(concept: HintConcept) -> Vec<f32> {
+    let index = match concept {
+        HintConcept::GraphStructure => 0,
+        HintConcept::NodeInterfaces => 1,
+        HintConcept::RequiredInputs => 2,
+        HintConcept::DataFlow => 3,
+        HintConcept::ExplicitTypes => 4,
+    };
+    let mut vector = vec![0.0; 5];
+    vector[index] = 1.0;
+    vector
+}
+
+fn concept_memory() -> &'static KnowledgeStore {
+    static MEMORY: OnceLock<KnowledgeStore> = OnceLock::new();
+    MEMORY.get_or_init(|| {
+        let store = KnowledgeStore::new();
+        for concept in [
+            HintConcept::GraphStructure,
+            HintConcept::NodeInterfaces,
+            HintConcept::RequiredInputs,
+            HintConcept::DataFlow,
+            HintConcept::ExplicitTypes,
+        ] {
+            store.learn(
+                concept_key(concept).to_string(),
+                "rust_learning".to_string(),
+                concept_vector(concept),
+            );
+        }
+        store
+    })
+}
+
+/// Grounds a tutor signal in seed-core's deterministic local concept memory.
+fn ground_concept(signal: HintConcept) -> HintConcept {
+    let (matches, _) = concept_memory().query_top_k(&concept_vector(signal), 1);
+    match matches.first().map(|item| item.concept.as_str()) {
+        Some("graph_structure") => HintConcept::GraphStructure,
+        Some("node_interfaces") => HintConcept::NodeInterfaces,
+        Some("required_inputs") => HintConcept::RequiredInputs,
+        Some("data_flow") => HintConcept::DataFlow,
+        Some("explicit_types") => HintConcept::ExplicitTypes,
+        _ => signal,
+    }
+}
+
+fn hint_id(code: &HintCode, node_id: Option<&str>, params: &BTreeMap<String, String>) -> String {
+    let code = serde_json::to_value(code)
+        .ok()
+        .and_then(|value| value.as_str().map(str::to_owned))
+        .unwrap_or_else(|| "hint".to_string());
+    let details = params
+        .iter()
+        .map(|(key, value)| format!("{key}={value}"))
+        .collect::<Vec<_>>()
+        .join("&");
+    format!("{code}:{}:{details}", node_id.unwrap_or("graph"))
 }
 
 fn hint(
@@ -87,17 +189,78 @@ fn hint(
     suggestion: Option<HintSuggestion>,
     params: impl IntoIterator<Item = (&'static str, String)>,
 ) -> Hint {
+    let params: BTreeMap<String, String> = params
+        .into_iter()
+        .map(|(key, value)| (key.to_string(), value))
+        .collect();
+    let concept = ground_concept(concept);
     Hint {
+        id: hint_id(&code, node_id.as_deref(), &params),
         code,
         severity,
         concept,
-        params: params
-            .into_iter()
-            .map(|(key, value)| (key.to_string(), value))
-            .collect(),
+        level: AdviceLevel::Nudge,
+        attempts: 1,
+        params,
         node_id,
         suggestion,
     }
+}
+
+pub fn personalize_hints(
+    mut hints: Vec<Hint>,
+    mut progress: TutorProgress,
+    revision: String,
+) -> TutorOutcome {
+    let changed = progress.revision.as_deref() != Some(revision.as_str());
+    let current_concepts: BTreeSet<HintConcept> = hints.iter().map(|hint| hint.concept).collect();
+
+    let mut learned_now = progress
+        .active
+        .values()
+        .copied()
+        .filter(|concept| !current_concepts.contains(concept))
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+    learned_now.retain(|concept| progress.learned.insert(*concept));
+
+    if changed {
+        for hint in &hints {
+            let attempts = progress.attempts.entry(hint.id.clone()).or_default();
+            *attempts = attempts.saturating_add(1);
+        }
+    }
+
+    for hint in &mut hints {
+        hint.attempts = *progress.attempts.entry(hint.id.clone()).or_insert(1);
+        hint.level = match hint.attempts {
+            0 | 1 => AdviceLevel::Nudge,
+            2 => AdviceLevel::Explain,
+            _ => AdviceLevel::Solution,
+        };
+    }
+
+    progress.active = hints
+        .iter()
+        .map(|hint| (hint.id.clone(), hint.concept))
+        .collect();
+    progress.revision = Some(revision);
+
+    TutorOutcome {
+        hints,
+        progress,
+        learned_now,
+    }
+}
+
+pub fn tutor_outcome(
+    graph: &GraphSpec,
+    registry: &NodeRegistry,
+    progress: TutorProgress,
+    revision: String,
+) -> TutorOutcome {
+    personalize_hints(generate_hints(graph, registry), progress, revision)
 }
 
 pub fn generate_hints(graph: &GraphSpec, registry: &NodeRegistry) -> Vec<Hint> {
@@ -444,5 +607,82 @@ mod tests {
         let first = serialized.as_array().unwrap().first().unwrap();
         assert!(first.get("code").is_some());
         assert!(first.get("message").is_none());
+    }
+
+    #[test]
+    fn repeated_issue_progresses_from_nudge_to_solution() {
+        let graph: GraphSpec = serde_json::from_value(json!({
+            "graph_version": "0.1",
+            "nodes": [{"id": "reader", "kind": "fs_read", "config": {}}],
+            "edges": []
+        }))
+        .unwrap();
+        let registry = test_registry();
+
+        let first = tutor_outcome(
+            &graph,
+            &registry,
+            TutorProgress::default(),
+            "revision-1".into(),
+        );
+        assert!(first
+            .hints
+            .iter()
+            .all(|hint| hint.level == AdviceLevel::Nudge && hint.attempts == 1));
+
+        let second = tutor_outcome(&graph, &registry, first.progress, "revision-2".into());
+        assert!(second
+            .hints
+            .iter()
+            .all(|hint| hint.level == AdviceLevel::Explain && hint.attempts == 2));
+
+        let repeated_refresh =
+            tutor_outcome(&graph, &registry, second.progress, "revision-2".into());
+        assert!(repeated_refresh
+            .hints
+            .iter()
+            .all(|hint| hint.level == AdviceLevel::Explain && hint.attempts == 2));
+
+        let third = tutor_outcome(
+            &graph,
+            &registry,
+            repeated_refresh.progress,
+            "revision-3".into(),
+        );
+        assert!(third
+            .hints
+            .iter()
+            .all(|hint| hint.level == AdviceLevel::Solution && hint.attempts == 3));
+    }
+
+    #[test]
+    fn resolving_an_issue_marks_its_concept_as_learned() {
+        let broken: GraphSpec = serde_json::from_value(json!({
+            "graph_version": "0.1",
+            "nodes": [{"id": "reader", "kind": "fs_read", "config": {}}],
+            "edges": []
+        }))
+        .unwrap();
+        let fixed: GraphSpec = serde_json::from_value(json!({
+            "graph_version": "0.1",
+            "nodes": [{"id": "reader", "kind": "fs_read", "config": {"path": "data/input.txt"}}],
+            "edges": []
+        }))
+        .unwrap();
+        let registry = test_registry();
+
+        let first = tutor_outcome(
+            &broken,
+            &registry,
+            TutorProgress::default(),
+            "broken".into(),
+        );
+        let resolved = tutor_outcome(&fixed, &registry, first.progress, "fixed".into());
+
+        assert!(resolved.learned_now.contains(&HintConcept::RequiredInputs));
+        assert!(resolved
+            .progress
+            .learned
+            .contains(&HintConcept::RequiredInputs));
     }
 }

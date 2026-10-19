@@ -19,7 +19,7 @@
     {
       "id": "welcome-admin",
       "kind": "log_output",
-      "config": { "text": "Witaj, adminie!" }
+      "config": { "text": "Welcome, admin!" }
     },
     {
       "id": "wait",
@@ -29,13 +29,13 @@
     {
       "id": "welcome-user",
       "kind": "log_output",
-      "config": { "text": "Witaj, użytkowniku (po 500ms)." },
+      "config": { "text": "Welcome, user (after 500ms)." },
       "after": ["wait"]
     },
     {
       "id": "done",
       "kind": "log_output",
-      "config": { "text": "Koniec - ten węzeł działa zawsze." }
+      "config": { "text": "Finished - this node always runs." }
     }
   ],
   "edges": [
