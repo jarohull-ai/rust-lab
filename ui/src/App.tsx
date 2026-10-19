@@ -18,6 +18,7 @@ import { CodeView } from './components/CodeView';
 import { ConsoleOutput } from './components/ConsoleOutput';
 import { Toolbar } from './components/Toolbar';
 import { GuidedLessons } from './components/GuidedLessons';
+import { WelcomeScreen } from './components/WelcomeScreen';
 import { createLessonSetup, LessonId } from './lessons';
 import {
   GraphSpec,
@@ -30,6 +31,7 @@ import {
 
 let idCounter = 1;
 let logCounter = 1;
+const WELCOME_KEY = 'rust-lab.welcome.0.2.dismissed';
 
 const INITIAL_NODES: Node[] = [
   {
@@ -80,6 +82,9 @@ export const App: React.FC = () => {
   const [consoleOpen, setConsoleOpen] = useState<boolean>(true);
   const [lessonsOpen, setLessonsOpen] = useState<boolean>(false);
   const [activeLesson, setActiveLesson] = useState<LessonId | null>(null);
+  const [welcomeOpen, setWelcomeOpen] = useState(
+    () => window.localStorage.getItem(WELCOME_KEY) !== '1'
+  );
 
   const [isValidating, setIsValidating] = useState<boolean>(false);
   const [isExecuting, setIsExecuting] = useState<boolean>(false);
@@ -410,6 +415,11 @@ export const App: React.FC = () => {
     if (activeLesson) handleStartLesson(activeLesson);
   }, [activeLesson, handleStartLesson]);
 
+  const dismissWelcome = useCallback(() => {
+    window.localStorage.setItem(WELCOME_KEY, '1');
+    setWelcomeOpen(false);
+  }, []);
+
   // 12. Load Ready-to-Run Examples
   const handleLoadExample = (example: 'condition' | 'text' | 'http') => {
     setActiveLesson(null);
@@ -578,6 +588,16 @@ export const App: React.FC = () => {
 
   return (
     <div className="flex flex-col h-screen w-screen bg-slate-950 font-sans text-slate-100 select-none">
+      {welcomeOpen && (
+        <WelcomeScreen
+          onExplore={dismissWelcome}
+          onStartLesson={() => {
+            dismissWelcome();
+            handleStartLesson('text_pipeline');
+          }}
+        />
+      )}
+
       {/* Top Navigation & Actions */}
       <Toolbar
         graph={currentGraph}

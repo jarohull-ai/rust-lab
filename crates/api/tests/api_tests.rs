@@ -57,7 +57,7 @@ async fn health_endpoint_reports_service_status() {
 
     assert_eq!(health.status, "ok");
     assert_eq!(health.service, "rust-lab-api");
-    assert_eq!(health.version, "0.1.0");
+    assert_eq!(health.version, env!("CARGO_PKG_VERSION"));
 }
 
 #[tokio::test]

@@ -180,6 +180,17 @@ const en: Record<string, string> = {
   'lesson.conditions.criterion.2': 'The Boolean value reaches the condition.',
   'lesson.conditions.criterion.3': 'True and false branch IDs are configured.',
   'lesson.conditions.criterion.4': 'The true branch ran and the false branch was skipped.',
+  'welcome.title': 'Build Rust by connecting ideas',
+  'welcome.subtitle': 'Create a visual data-flow graph, inspect the Rust code it generates, and learn through immediate, local feedback.',
+  'welcome.feature.graph.title': 'Visual Graph',
+  'welcome.feature.graph.description': 'Connect typed nodes and see how values move through a real program.',
+  'welcome.feature.rust.title': 'Real Rust Code',
+  'welcome.feature.rust.description': 'Every valid graph can become a standalone Cargo project.',
+  'welcome.feature.tutor.title': 'SEED Tutor',
+  'welcome.feature.tutor.description': 'Receive adaptive hints without an account, cloud service, or LLM.',
+  'welcome.explore': 'Explore the canvas',
+  'welcome.startLesson': 'Start the first lesson',
+  'welcome.localOnly': 'Learning progress stays in this browser.',
 };
 
 const pl: Record<string, string> = {
@@ -358,6 +369,17 @@ const pl: Record<string, string> = {
   'lesson.conditions.criterion.2': 'Wartość Boolean trafia do warunku.',
   'lesson.conditions.criterion.3': 'Identyfikatory gałęzi prawdy i fałszu są skonfigurowane.',
   'lesson.conditions.criterion.4': 'Gałąź prawdy została wykonana, a gałąź fałszu pominięta.',
+  'welcome.title': 'Buduj w Ruście, łącząc idee',
+  'welcome.subtitle': 'Twórz wizualny graf przepływu danych, obserwuj generowany kod Rust i ucz się dzięki natychmiastowej, lokalnej informacji zwrotnej.',
+  'welcome.feature.graph.title': 'Wizualny graf',
+  'welcome.feature.graph.description': 'Łącz węzły o określonych typach i obserwuj przepływ wartości przez prawdziwy program.',
+  'welcome.feature.rust.title': 'Prawdziwy kod Rust',
+  'welcome.feature.rust.description': 'Każdy poprawny graf może stać się samodzielnym projektem Cargo.',
+  'welcome.feature.tutor.title': 'SEED Tutor',
+  'welcome.feature.tutor.description': 'Otrzymuj adaptacyjne podpowiedzi bez konta, chmury i modelu LLM.',
+  'welcome.explore': 'Poznaj obszar roboczy',
+  'welcome.startLesson': 'Rozpocznij pierwszą lekcję',
+  'welcome.localOnly': 'Postęp nauki pozostaje w tej przeglądarce.',
 };
 
 const dictionaries = { en, pl };

@@ -11,6 +11,7 @@ import {
 import { SeedTutorButton } from './SeedTutorButton';
 import { useI18n } from '../i18n';
 import { GraphSpec } from '../types';
+import packageInfo from '../../package.json';
 
 interface ToolbarProps {
   graph: GraphSpec;
@@ -58,7 +59,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             <div className="flex items-center gap-2">
               <span className="font-bold text-sm tracking-wide text-slate-100">RUST LAB</span>
               <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-400 font-semibold border border-orange-500/30">
-                v0.1.0
+                v{packageInfo.version}
               </span>
             </div>
             <span className="text-[10px] text-slate-400 block -mt-0.5 font-mono">

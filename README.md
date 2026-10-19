@@ -4,6 +4,8 @@
 
 Rust Lab is a standalone learning environment for building typed data-flow graphs, seeing the Rust code they generate, and running the result. The default product language is English; Polish is available through the `EN / PL` switch in the UI.
 
+Current local release candidate: **v0.2.0**. It is not published to crates.io.
+
 ## Project status
 
 - 11 built-in nodes for I/O, parsing, conversion, control flow, and output.
@@ -23,6 +25,7 @@ rust-lab/
 │   ├── runtime/        # Validator, planner, executor, codegen, tutor
 │   └── api/            # Axum API and static UI hosting
 ├── ui/                 # React, React Flow, CodeMirror, EN/PL localization
+├── scripts/            # One-command local start and release verification
 ├── examples/           # Runnable graph JSON files
 └── data/               # Local sample input and output
 ```
@@ -76,11 +79,23 @@ Each lesson starts with an intentionally incomplete graph. Its checklist updates
 
 ## Run the application
 
+From a fresh checkout, use the single local start command:
+
+```bash
+./scripts/run-local.sh
+```
+
+The script installs UI dependencies when needed, builds the interface, and starts the Rust API. Open `http://localhost:3030`. To use another port:
+
+```bash
+PORT=3031 ./scripts/run-local.sh
+```
+
+The equivalent manual command after the UI has been built is:
+
 ```bash
 cargo run -p api
 ```
-
-Open `http://localhost:3030`.
 
 For frontend development:
 
@@ -111,12 +126,21 @@ cargo run
 
 ## Verification
 
+Run the complete local release gate:
+
+```bash
+./scripts/verify.sh
+```
+
+Or run each command manually:
+
 ```bash
 cargo test --workspace
 cargo clippy --all-targets --all-features -- -D warnings
 
 cd ui
 npm ci
+npm test
 npm run build
 ```
 

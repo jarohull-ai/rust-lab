@@ -3,7 +3,17 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+
+## [0.2.0] - 2026-10-19
+
+Local release candidate; not published to crates.io.
+
 ### Added
+- SEED Tutor with deterministic `seed-core` concept matching and adaptive three-level hints.
+- Complete English/Polish UI switch with English as the canonical default language.
+- Three guided lessons with live criteria, successful-run checks, and browser-local progress.
+- First-run welcome screen with an immediate language choice and lesson entry point.
+- One-command local startup (`scripts/run-local.sh`) and release verification (`scripts/verify.sh`).
 - **Phase 5: Construction Mode (Cargo Project Generator)**:
   - Code generator module `crates/runtime/src/codegen.rs` converting `GraphSpec` into a standalone Cargo workspace.
   - Generates self-contained `src/nodes.rs` with clean public functions for used nodes.
@@ -31,9 +41,13 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - API spec rewritten to match the format the runtime actually reads (v0.2).
+- Product, API, runtime, and UI versions aligned at `0.2.0`.
+- Execution safety rules renamed from SEED Policy to Execution Policy so SEED refers only to the tutor.
+- Example and sample content normalized to English; Polish remains an explicit UI option.
 
 ### Fixed
 - Corrupted `json_parse`, `text_clean` and `nodes/mod.rs` sources; compiler warnings in `fs_read`/`fs_write`.
+- `json_parse` and `text_clean` configuration values are now visible and editable in the node UI.
 
 ## [0.1.0] - 2026-10-19
 ### Added

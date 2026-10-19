@@ -77,7 +77,7 @@ Rust Lab enforces strict type checking at validation time to catch wiring errors
 
 > **Fail-Fast Rule**: `file_path` is strictly distinct from `string`. Connecting a generic `string` (e.g. `http_get.body`) to a `file_path` is a validation error. Explicit conversion nodes must be used.
 
-## Node Catalogue (runtime v0.0.2)
+## Node Catalogue (runtime v0.2.0)
 
 | kind | inputs (required*) | outputs | notes |
 |------|--------------------|---------|-------|

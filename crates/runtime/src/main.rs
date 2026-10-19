@@ -69,7 +69,7 @@ async fn main() -> Result<()> {
     policy.from_env();
 
     let executor = Executor::new(registry);
-    println!("Starting Rust Lab Runtime v0.0.2...");
+    println!("Starting Rust Lab Runtime v{}...", env!("CARGO_PKG_VERSION"));
     let report = executor.execute_with_policy(graph, &policy).await?;
     println!(
         "Execution finished successfully! ({} executed, {} skipped)",
