@@ -43,10 +43,39 @@ A value arriving over an edge overrides the same key in the target's `config`.
 ## Validation Rules
 - Node ids are unique; every `kind` is registered.
 - Edge endpoints exist; `from.port` is a declared output, `to.port` a declared input.
+- **Edge Type Compatibility**: The source pin type (`from_pin.pin_type`) must be compatible with the destination pin type (`to_pin.pin_type`).
+- **Static Config Type Checking**: Values provided in a node's `config` must strictly match the declared `pin_type` of the target input pin.
 - `condition` config has `true_branch` and `false_branch` pointing at existing,
   distinct nodes other than itself.
 - `after` entries reference existing nodes, are not the node itself and are not duplicated.
 - No cycles across data edges, condition branches and `after` lists.
+
+## Type System & Compatibility Matrix
+
+Rust Lab enforces strict type checking at validation time to catch wiring errors before graph execution.
+
+### Pin Types (`PinType`)
+- `string`: UTF-8 textual data
+- `number`: Numeric values (integers and floats)
+- `boolean`: `true` or `false`
+- `json`: Structured or parsed JSON value (`serde_json::Value`)
+- `http_response`: HTTP response payload/metadata
+- `file_path`: Filesystem path (strictly distinct from generic `string`)
+- `any`: Universal escape hatch (accepts and emits any data type; used by `log_output`)
+
+### Compatibility Matrix (`from.is_compatible_with(to)`)
+
+| From \ To | `string` | `number` | `boolean` | `json` | `http_response` | `file_path` | `any` |
+|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| **`string`** | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
+| **`number`** | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ |
+| **`boolean`** | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ✅ |
+| **`json`** | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ✅ |
+| **`http_response`** | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ✅ |
+| **`file_path`** | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ |
+| **`any`** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+
+> **Fail-Fast Rule**: `file_path` is strictly distinct from `string`. Connecting a generic `string` (e.g. `http_get.body`) to a `file_path` is a validation error. Explicit conversion nodes must be used.
 
 ## Node Catalogue (runtime v0.0.2)
 

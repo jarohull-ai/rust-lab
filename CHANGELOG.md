@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 ### Added
+- **Phase 4: Extended Validation & Typed Pins**:
+  - `PinType::is_compatible_with` for strict type checking on edges (`String`, `Number`, `Boolean`, `Json`, `HttpResponse`, `FilePath`, `Any`).
+  - Strict isolation of `FilePath` from `String` (fail-fast, requiring explicit conversion).
+  - `PinType::matches_value` and static `config` validation for node inputs.
+  - Detailed type mismatch error reporting (`Type mismatch on edge from 'nodeA.pinA' [TypeA] to 'nodeB.pinB' [TypeB]`).
+  - Unit tests for PinType compatibility (SDK) and edge/config validation (Runtime).
 - Edge-based data mapping between node outputs and inputs, with required-input checks.
 - Nodes: `json_parse` (dot-path), `text_clean` (4 flags), `condition` (`__next__`/`__skip__`), `delay` (`ms`/`s`/`m`).
 - `after` control dependencies on nodes for ordering nodes without outputs.

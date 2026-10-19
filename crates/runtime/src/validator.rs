@@ -26,7 +26,7 @@ impl<'a> Validator<'a> {
             }
         }
 
-        // 2. Edges: endpoints exist and ports are declared pins.
+        // 2. Edges: endpoints exist, ports are declared pins, and types are compatible.
         for edge in &graph.edges {
             let from = specs
                 .get(edge.from.node.as_str())
@@ -35,21 +35,62 @@ impl<'a> Validator<'a> {
                 .get(edge.to.node.as_str())
                 .ok_or_else(|| anyhow!("Edge target node {} does not exist", edge.to.node))?;
 
-            if !from.outputs.iter().any(|p| p.name == edge.from.port) {
+            let from_pin = from
+                .outputs
+                .iter()
+                .find(|p| p.name == edge.from.port)
+                .ok_or_else(|| {
+                    anyhow!(
+                        "Node '{}' [{}] has no output '{}'",
+                        edge.from.node,
+                        from.name,
+                        edge.from.port
+                    )
+                })?;
+
+            let to_pin = to
+                .inputs
+                .iter()
+                .find(|p| p.name == edge.to.port)
+                .ok_or_else(|| {
+                    anyhow!(
+                        "Node '{}' [{}] has no input '{}'",
+                        edge.to.node,
+                        to.name,
+                        edge.to.port
+                    )
+                })?;
+
+            if !from_pin.pin_type.is_compatible_with(&to_pin.pin_type) {
                 return Err(anyhow!(
-                    "Node '{}' [{}] has no output '{}'",
+                    "Type mismatch on edge from '{}.{}' [{}] to '{}.{}' [{}]",
                     edge.from.node,
-                    from.name,
-                    edge.from.port
+                    edge.from.port,
+                    from_pin.pin_type,
+                    edge.to.node,
+                    edge.to.port,
+                    to_pin.pin_type
                 ));
             }
-            if !to.inputs.iter().any(|p| p.name == edge.to.port) {
-                return Err(anyhow!(
-                    "Node '{}' [{}] has no input '{}'",
-                    edge.to.node,
-                    to.name,
-                    edge.to.port
-                ));
+        }
+
+        // 3. Static config validation: verify types against declared input pins.
+        for node in &graph.nodes {
+            let spec = &specs[node.id.as_str()];
+            if let serde_json::Value::Object(map) = &node.config {
+                for (key, val) in map {
+                    if let Some(pin) = spec.inputs.iter().find(|p| &p.name == key) {
+                        if !pin.pin_type.matches_value(val) {
+                            return Err(anyhow!(
+                                "Config type mismatch on node '{}', pin '{}': expected {}, got {}",
+                                node.id,
+                                key,
+                                pin.pin_type,
+                                json_type_name(val)
+                            ));
+                        }
+                    }
+                }
             }
         }
 
@@ -110,6 +151,17 @@ impl<'a> Validator<'a> {
     }
 }
 
+fn json_type_name(val: &serde_json::Value) -> &'static str {
+    match val {
+        serde_json::Value::Null => "null",
+        serde_json::Value::Bool(_) => "boolean",
+        serde_json::Value::Number(_) => "number",
+        serde_json::Value::String(_) => "string",
+        serde_json::Value::Array(_) => "array",
+        serde_json::Value::Object(_) => "object",
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -136,6 +188,105 @@ mod tests {
         .unwrap_err()
         .to_string();
         assert!(err.contains("has no input 'json'"), "{err}");
+    }
+
+    #[test]
+    fn edge_string_to_string_passes() {
+        let res = validate(json!({
+            "graph_version": "0.1",
+            "nodes": [
+                {"id": "get", "kind": "http_get", "config": {"url": "http://x"}},
+                {"id": "parse", "kind": "json_parse", "config": {}}
+            ],
+            "edges": [{"from": {"node": "get", "port": "body"}, "to": {"node": "parse", "port": "json_str"}}]
+        }));
+        assert!(res.is_ok());
+    }
+
+    #[test]
+    fn edge_string_to_bool_fails_with_error() {
+        let err = validate(json!({
+            "graph_version": "0.1",
+            "nodes": [
+                {"id": "get", "kind": "http_get", "config": {"url": "http://x"}},
+                {"id": "check", "kind": "condition", "config": {"true_branch": "a", "false_branch": "b"}},
+                {"id": "a", "kind": "delay", "config": {"duration": "1ms"}},
+                {"id": "b", "kind": "delay", "config": {"duration": "1ms"}}
+            ],
+            "edges": [{"from": {"node": "get", "port": "body"}, "to": {"node": "check", "port": "value"}}]
+        }))
+        .unwrap_err()
+        .to_string();
+        assert_eq!(
+            err,
+            "Type mismatch on edge from 'get.body' [string] to 'check.value' [boolean]"
+        );
+    }
+
+    #[test]
+    fn log_output_accepts_any_from_string_json_and_other_types() {
+        // http_get.body [string] -> log_output.text [any]
+        let string_res = validate(json!({
+            "graph_version": "0.1",
+            "nodes": [
+                {"id": "get", "kind": "http_get", "config": {"url": "http://x"}},
+                {"id": "log", "kind": "log_output", "config": {}}
+            ],
+            "edges": [{"from": {"node": "get", "port": "body"}, "to": {"node": "log", "port": "text"}}]
+        }));
+        assert!(string_res.is_ok());
+
+        // json_parse.value [json] -> log_output.text [any]
+        let json_res = validate(json!({
+            "graph_version": "0.1",
+            "nodes": [
+                {"id": "parse", "kind": "json_parse", "config": {"json_str": "{}"}},
+                {"id": "log", "kind": "log_output", "config": {}}
+            ],
+            "edges": [{"from": {"node": "parse", "port": "value"}, "to": {"node": "log", "port": "text"}}]
+        }));
+        assert!(json_res.is_ok());
+    }
+
+    #[test]
+    fn config_validates_pin_types() {
+        // bool matches boolean
+        let valid_bool = validate(json!({
+            "graph_version": "0.1",
+            "nodes": [
+                {"id": "check", "kind": "condition", "config": {"value": true, "true_branch": "a", "false_branch": "b"}},
+                {"id": "a", "kind": "delay", "config": {"duration": "1ms"}},
+                {"id": "b", "kind": "delay", "config": {"duration": "1ms"}}
+            ],
+            "edges": []
+        }));
+        assert!(valid_bool.is_ok());
+
+        // string does NOT match boolean
+        let invalid_bool = validate(json!({
+            "graph_version": "0.1",
+            "nodes": [
+                {"id": "check", "kind": "condition", "config": {"value": "true", "true_branch": "a", "false_branch": "b"}},
+                {"id": "a", "kind": "delay", "config": {"duration": "1ms"}},
+                {"id": "b", "kind": "delay", "config": {"duration": "1ms"}}
+            ],
+            "edges": []
+        }))
+        .unwrap_err()
+        .to_string();
+        assert!(invalid_bool.contains("Config type mismatch on node 'check', pin 'value': expected boolean, got string"), "{invalid_bool}");
+
+        // number does NOT match string
+        let invalid_string = validate(json!({
+            "graph_version": "0.1",
+            "nodes": [
+                {"id": "get", "kind": "http_get", "config": {"url": 12345}}
+            ],
+            "edges": []
+        }))
+        .unwrap_err()
+        .to_string();
+        assert!(invalid_string.contains("Config type mismatch on node 'get', pin 'url': expected string, got number"), "{invalid_string}");
     }
 
     #[test]
