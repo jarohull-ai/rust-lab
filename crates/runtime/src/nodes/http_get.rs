@@ -5,6 +5,15 @@ use std::collections::HashMap;
 
 pub struct HttpGetNode;
 
+pub async fn http_get(url: &str) -> Result<String> {
+    println!("   Fetching: {}", url);
+    let client = reqwest::Client::builder()
+        .user_agent("RustLab-PoC/0.0.2")
+        .build()?;
+    let resp = client.get(url).send().await?.text().await?;
+    Ok(resp)
+}
+
 #[async_trait::async_trait]
 impl ViperNode for HttpGetNode {
     fn spec(&self) -> NodeSpec {
@@ -36,16 +45,11 @@ impl ViperNode for HttpGetNode {
             .as_str()
             .ok_or_else(|| anyhow::anyhow!("URL parameter must be a string"))?;
 
-        println!("   Fetching: {}", url);
-
-        let client = reqwest::Client::builder()
-            .user_agent("RustLab-PoC/0.0.2")
-            .build()?;
-
-        let resp = client.get(url).send().await?.text().await?;
+        let body = http_get(url).await?;
 
         let mut output = HashMap::new();
-        output.insert("body".to_string(), json!(resp));
+        output.insert("body".to_string(), json!(body));
         Ok(output)
     }
 }
+

@@ -24,6 +24,42 @@ fn flag(input: &NodeInput, name: &str, default: bool) -> Result<bool> {
     }
 }
 
+pub fn text_clean(
+    text: &str,
+    trim: bool,
+    collapse: bool,
+    to_lower: bool,
+    to_upper: bool,
+) -> Result<String> {
+    if to_lower && to_upper {
+        return Err(anyhow!("'to_lower' and 'to_upper' cannot both be true"));
+    }
+
+    let mut result = text.to_string();
+    if trim {
+        result = result.trim().to_string();
+    }
+    if collapse {
+        // Keep a single leading/trailing space when trim is off.
+        let lead = !trim && result.starts_with(char::is_whitespace);
+        let trail = !trim && result.ends_with(char::is_whitespace);
+        let core = result.split_whitespace().collect::<Vec<_>>().join(" ");
+        result = format!(
+            "{}{}{}",
+            if lead { " " } else { "" },
+            core,
+            if trail && !core.is_empty() { " " } else { "" }
+        );
+    }
+    if to_lower {
+        result = result.to_lowercase();
+    }
+    if to_upper {
+        result = result.to_uppercase();
+    }
+    Ok(result)
+}
+
 #[async_trait]
 impl ViperNode for TextCleanNode {
     fn spec(&self) -> NodeSpec {
@@ -69,32 +105,7 @@ impl ViperNode for TextCleanNode {
         let to_lower = flag(&input, "to_lower", false)?;
         let to_upper = flag(&input, "to_upper", false)?;
 
-        if to_lower && to_upper {
-            return Err(anyhow!("'to_lower' and 'to_upper' cannot both be true"));
-        }
-
-        let mut result = text.to_string();
-        if trim {
-            result = result.trim().to_string();
-        }
-        if collapse {
-            // Keep a single leading/trailing space when trim is off.
-            let lead = !trim && result.starts_with(char::is_whitespace);
-            let trail = !trim && result.ends_with(char::is_whitespace);
-            let core = result.split_whitespace().collect::<Vec<_>>().join(" ");
-            result = format!(
-                "{}{}{}",
-                if lead { " " } else { "" },
-                core,
-                if trail && !core.is_empty() { " " } else { "" }
-            );
-        }
-        if to_lower {
-            result = result.to_lowercase();
-        }
-        if to_upper {
-            result = result.to_uppercase();
-        }
+        let result = text_clean(text, trim, collapse, to_lower, to_upper)?;
 
         let mut out = NodeOutput::new();
         out.insert("cleaned".into(), Value::String(result));

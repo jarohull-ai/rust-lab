@@ -113,3 +113,18 @@ Rust Lab enforces strict type checking at validation time to catch wiring errors
 ```
 
 See `examples/` for runnable graphs: `cargo run -p runtime -- examples/condition_delay.json`.
+
+## Dual Execution Modes
+
+### 1. Fast Runtime (Interpretive)
+Directly executes the graph JSON using the modular runtime engine:
+```bash
+cargo run -p runtime -- <graph.json>
+```
+
+### 2. Construction Mode (Compiled Standalone Export)
+Generates an independent Cargo project with native async Rust code, typed variable bindings, and native `if/else` control flow:
+```bash
+cargo run -p runtime -- --export <output_dir> <graph.json>
+cd <output_dir> && cargo run
+```

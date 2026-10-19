@@ -6,6 +6,13 @@ use std::collections::HashMap;
 
 pub struct JsonToStringNode;
 
+pub fn json_to_string(val: &Value) -> Result<String> {
+    match val {
+        Value::String(s) => Ok(s.clone()),
+        _ => Ok(serde_json::to_string(val)?),
+    }
+}
+
 #[async_trait]
 impl ViperNode for JsonToStringNode {
     fn spec(&self) -> NodeSpec {
@@ -35,10 +42,7 @@ impl ViperNode for JsonToStringNode {
             .get("value")
             .ok_or_else(|| anyhow!("json_to_string requires a 'value' input"))?;
 
-        let string_repr = match val {
-            Value::String(s) => s.clone(),
-            _ => serde_json::to_string(val)?,
-        };
+        let string_repr = json_to_string(val)?;
 
         let mut output = HashMap::new();
         output.insert("text".to_string(), json!(string_repr));

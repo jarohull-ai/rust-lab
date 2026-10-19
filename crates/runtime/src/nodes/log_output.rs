@@ -5,6 +5,11 @@ use std::collections::HashMap;
 
 pub struct LogOutputNode;
 
+pub fn log_output(text: impl std::fmt::Display) -> Result<()> {
+    println!("   Log Output: {}", text);
+    Ok(())
+}
+
 #[async_trait::async_trait]
 impl ViperNode for LogOutputNode {
     fn spec(&self) -> NodeSpec {
@@ -26,7 +31,8 @@ impl ViperNode for LogOutputNode {
 
     async fn execute(&self, input: NodeInput) -> Result<NodeOutput, anyhow::Error> {
         let text = input.get("text").cloned().unwrap_or(json!("No input"));
-        println!("   Log Output: {}", text);
+        log_output(text)?;
         Ok(HashMap::new())
     }
 }
+

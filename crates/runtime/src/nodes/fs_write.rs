@@ -5,6 +5,12 @@ use std::collections::HashMap;
 
 pub struct FsWriteNode;
 
+pub fn fs_write(path: &str, content: &str) -> Result<()> {
+    println!("   Writing to file: {}", path);
+    std::fs::write(path, content)?;
+    Ok(())
+}
+
 #[async_trait::async_trait]
 impl ViperNode for FsWriteNode {
     fn spec(&self) -> NodeSpec {
@@ -46,9 +52,9 @@ impl ViperNode for FsWriteNode {
             .as_str()
             .ok_or_else(|| anyhow::anyhow!("content parameter must be a string"))?;
 
-        println!("   Writing to file: {}", path);
-        std::fs::write(path, content)?;
+        fs_write(path, content)?;
 
         Ok(HashMap::new())
     }
 }
+

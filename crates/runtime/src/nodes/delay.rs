@@ -34,6 +34,13 @@ pub fn parse_duration(text: &str) -> Result<Duration> {
     Ok(duration)
 }
 
+pub async fn delay(duration_str: &str) -> Result<()> {
+    let duration = parse_duration(duration_str)?;
+    println!("   Sleeping for {duration:?}");
+    tokio::time::sleep(duration).await;
+    Ok(())
+}
+
 #[async_trait]
 impl ViperNode for DelayNode {
     fn spec(&self) -> NodeSpec {
@@ -59,9 +66,7 @@ impl ViperNode for DelayNode {
             .ok_or_else(|| anyhow!("delay requires a 'duration' input"))?
             .as_str()
             .ok_or_else(|| anyhow!("'duration' must be a string like '3s'"))?;
-        let duration = parse_duration(text)?;
-        println!("   Sleeping for {duration:?}");
-        tokio::time::sleep(duration).await;
+        delay(text).await?;
         Ok(NodeOutput::new())
     }
 }

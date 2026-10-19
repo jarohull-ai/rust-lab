@@ -6,6 +6,12 @@ use std::fs;
 
 pub struct FsReadNode;
 
+pub fn fs_read(path: &str) -> Result<String> {
+    println!("   Reading file: {}", path);
+    let content = fs::read_to_string(path)?;
+    Ok(content)
+}
+
 #[async_trait::async_trait]
 impl ViperNode for FsReadNode {
     fn spec(&self) -> NodeSpec {
@@ -37,11 +43,11 @@ impl ViperNode for FsReadNode {
             .as_str()
             .ok_or_else(|| anyhow::anyhow!("path parameter must be a string"))?;
 
-        println!("   Reading file: {}", path);
-        let content = fs::read_to_string(path)?;
+        let content = fs_read(path)?;
 
         let mut output = HashMap::new();
         output.insert("content".to_string(), json!(content));
         Ok(output)
     }
 }
+

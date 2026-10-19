@@ -12,7 +12,7 @@
 - ✅ **Phase 2 & 3: Control Flow & Dependencies** – data edges, branching (`condition` with `__next__`/`__skip__`), ordering (`after`), branch pruning.
 - ✅ **Phase 4: Extended Validation & Typed Pins** – strict type checking (`PinType::is_compatible_with`), isolation of `FilePath` from `String`, static `config` validation.
 - ✅ **Phase 4.5: Converter Nodes** – explicit type casting nodes (`string_to_path`, `json_to_string`, `json_to_bool`).
-- 🔵 **Phase 5: Construction Mode** – Code generator converting `graph.json` to a standalone Cargo project (`main.rs` with `tokio`).
+- ✅ **Phase 5: Construction Mode** – Code generator converting `graph.json` to a standalone Cargo project (`main.rs` with `tokio`, native `if/else`, and `nodes.rs`).
 - 🔵 **Phase 6: Visual Canvas (UI)** – Interactive node graph editor.
 
 ---
@@ -20,7 +20,7 @@
 ## 🧱 Architecture
 
 - **[`crates/lab-node-sdk`](crates/lab-node-sdk)**: Core SDK defining the `ViperNode` trait, `NodeSpec`, `TypedPin`, and `PinType` compatibility matrix.
-- **[`crates/runtime`](crates/runtime)**: Execution runtime, CLI runner, `NodeRegistry`, `Executor`, `Validator`, and atomic node implementations.
+- **[`crates/runtime`](crates/runtime)**: Execution runtime, CLI runner, `NodeRegistry`, `Executor`, `Validator`, `codegen`, and atomic node implementations.
 
 ### Available Nodes (11)
 - **I/O & Network**: `http_get`, `fs_read`, `fs_write`, `log_output`
@@ -32,10 +32,20 @@
 
 ## ⚡ Quick Start
 
-### Build & Run
+### 1. Run Graph Interactively
 ```bash
 cargo build
 cargo run -p runtime -- graph.json
+```
+
+### 2. Export to Standalone Rust Project (Construction Mode)
+```bash
+# Export graph to a standalone Cargo project
+cargo run -p runtime -- --export ./my-exported-app examples/condition_delay.json
+
+# Build and run the exported project natively
+cd my-exported-app
+cargo run
 ```
 
 ### Run Examples

@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 ### Added
+- **Phase 5: Construction Mode (Cargo Project Generator)**:
+  - Code generator module `crates/runtime/src/codegen.rs` converting `GraphSpec` into a standalone Cargo workspace.
+  - Generates self-contained `src/nodes.rs` with clean public functions for used nodes.
+  - Generates idiomatic `src/main.rs` with variable data flow, native `if / else` branching via reachability analysis, and `tokio::main`.
+  - Added CLI flag `--export <output_dir> <graph.json>` to runtime.
+  - Full E2E tests verifying export and native compilation (`cargo check --offline` / `cargo run --offline`).
 - **Phase 4.5: Converter Nodes**:
   - `string_to_path`: explicitly converts and validates a `String` to a `FilePath`.
   - `json_to_string`: converts parsed `Json` values (strings, numbers, objects) to `String`.

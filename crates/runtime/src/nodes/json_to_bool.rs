@@ -6,6 +6,29 @@ use std::collections::HashMap;
 
 pub struct JsonToBoolNode;
 
+pub fn json_to_bool(val: &Value) -> Result<bool> {
+    match val {
+        Value::Bool(b) => Ok(*b),
+        Value::String(s) => match s.trim().to_lowercase().as_str() {
+            "true" | "1" | "yes" => Ok(true),
+            "false" | "0" | "no" => Ok(false),
+            other => Err(anyhow!("Cannot convert string '{other}' to boolean")),
+        },
+        Value::Number(n) => {
+            if let Some(i) = n.as_i64() {
+                match i {
+                    1 => Ok(true),
+                    0 => Ok(false),
+                    other => Err(anyhow!("Cannot convert number {other} to boolean (expected 0 or 1)")),
+                }
+            } else {
+                Err(anyhow!("Cannot convert floating number to boolean"))
+            }
+        }
+        other => Err(anyhow!("Cannot convert JSON value {other} to boolean")),
+    }
+}
+
 #[async_trait]
 impl ViperNode for JsonToBoolNode {
     fn spec(&self) -> NodeSpec {
@@ -35,26 +58,7 @@ impl ViperNode for JsonToBoolNode {
             .get("value")
             .ok_or_else(|| anyhow!("json_to_bool requires a 'value' input"))?;
 
-        let boolean_value = match val {
-            Value::Bool(b) => *b,
-            Value::String(s) => match s.trim().to_lowercase().as_str() {
-                "true" | "1" | "yes" => true,
-                "false" | "0" | "no" => false,
-                other => return Err(anyhow!("Cannot convert string '{other}' to boolean")),
-            },
-            Value::Number(n) => {
-                if let Some(i) = n.as_i64() {
-                    match i {
-                        1 => true,
-                        0 => false,
-                        other => return Err(anyhow!("Cannot convert number {other} to boolean (expected 0 or 1)")),
-                    }
-                } else {
-                    return Err(anyhow!("Cannot convert floating number to boolean"));
-                }
-            }
-            other => return Err(anyhow!("Cannot convert JSON value {other} to boolean")),
-        };
+        let boolean_value = json_to_bool(val)?;
 
         let mut output = HashMap::new();
         output.insert("value".to_string(), json!(boolean_value));

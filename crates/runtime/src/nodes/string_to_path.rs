@@ -6,6 +6,14 @@ use std::collections::HashMap;
 
 pub struct StringToPathNode;
 
+pub fn string_to_path(raw: &str) -> Result<String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Err(anyhow!("Path cannot be empty"));
+    }
+    Ok(trimmed.to_string())
+}
+
 #[async_trait]
 impl ViperNode for StringToPathNode {
     fn spec(&self) -> NodeSpec {
@@ -38,10 +46,7 @@ impl ViperNode for StringToPathNode {
             .as_str()
             .ok_or_else(|| anyhow!("'path' input must be a string"))?;
 
-        let trimmed = raw.trim();
-        if trimmed.is_empty() {
-            return Err(anyhow!("Path cannot be empty"));
-        }
+        let trimmed = string_to_path(raw)?;
 
         let mut output = HashMap::new();
         output.insert("path".to_string(), json!(trimmed));

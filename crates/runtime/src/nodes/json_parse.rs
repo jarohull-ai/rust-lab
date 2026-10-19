@@ -21,6 +21,15 @@ pub fn select_path(value: &Value, path: &str) -> Result<Value> {
     Ok(current.clone())
 }
 
+/// Parses a JSON string, optionally selecting a nested dot-notation path.
+pub fn json_parse(raw: &str, path: Option<&str>) -> Result<Value> {
+    let parsed: Value = serde_json::from_str(raw).map_err(|e| anyhow!("Invalid JSON: {e}"))?;
+    match path.filter(|p| !p.is_empty()) {
+        Some(p) => select_path(&parsed, p),
+        None => Ok(parsed),
+    }
+}
+
 #[async_trait]
 impl ViperNode for JsonParseNode {
     fn spec(&self) -> NodeSpec {
@@ -60,12 +69,8 @@ impl ViperNode for JsonParseNode {
             .as_str()
             .ok_or_else(|| anyhow!("'json_str' must be a string"))?;
 
-        let parsed: Value = serde_json::from_str(raw).map_err(|e| anyhow!("Invalid JSON: {e}"))?;
-
-        let value = match input.get("path").and_then(Value::as_str) {
-            Some(path) => select_path(&parsed, path)?,
-            None => parsed,
-        };
+        let path = input.get("path").and_then(Value::as_str);
+        let value = json_parse(raw, path)?;
 
         let mut out = NodeOutput::new();
         out.insert("value".into(), value);
