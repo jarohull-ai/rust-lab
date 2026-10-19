@@ -1,5 +1,4 @@
 use std::fs;
-use std::path::PathBuf;
 
 use runtime::{nodes::register_all, Executor, NodeRegistry, Validator};
 use serde_json::json;
@@ -21,17 +20,20 @@ fn validator_accepts_valid_pipeline_graph() {
         "nodes": [
             {"id": "fetch", "kind": "http_get", "config": {"url": "https://example.com"}},
             {"id": "parse", "kind": "json_parse", "config": {"json_str": "{\"message\":\"hello\"}", "path": "message"}},
+            {"id": "to_str", "kind": "json_to_string", "config": {}},
             {"id": "clean", "kind": "text_clean", "config": {"text": " sample ", "trim": true, "to_upper": true}},
             {"id": "print", "kind": "log_output", "config": {}}
         ],
         "edges": [
             {"from": {"node": "fetch", "port": "body"}, "to": {"node": "parse", "port": "json_str"}},
-            {"from": {"node": "parse", "port": "value"}, "to": {"node": "clean", "port": "text"}},
+            {"from": {"node": "parse", "port": "value"}, "to": {"node": "to_str", "port": "value"}},
+            {"from": {"node": "to_str", "port": "text"}, "to": {"node": "clean", "port": "text"}},
             {"from": {"node": "clean", "port": "cleaned"}, "to": {"node": "print", "port": "text"}}
         ]
     }));
 
-    let validator = Validator::new(&registry());
+    let reg = registry();
+    let validator = Validator::new(&reg);
     assert!(validator.validate(&g).is_ok());
 }
 
@@ -121,7 +123,8 @@ fn runtime_supports_branch_validation_and_execution_order() {
         "edges": []
     }));
 
-    let validator = Validator::new(&registry());
+    let reg = registry();
+    let validator = Validator::new(&reg);
     assert!(validator.validate(&g).is_ok());
 
     let order = runtime::plan::execution_order(&g).unwrap();
