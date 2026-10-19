@@ -1,0 +1,15 @@
+[package]
+name = "runtime"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+lab-node-sdk = { path = "../lab-node-sdk" }
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+thiserror = "1"
+anyhow.workspace = true
+async-trait = "0.1"

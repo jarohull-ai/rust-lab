@@ -1,0 +1,30 @@
+{
+  "graph_version": "0.1",
+  "nodes": [
+    {
+      "id": "fetch",
+      "kind": "http_get",
+      "config": { "url": "https://httpbin.org/json" }
+    },
+    {
+      "id": "title",
+      "kind": "json_parse",
+      "config": { "path": "slideshow.title" }
+    },
+    {
+      "id": "clean",
+      "kind": "text_clean",
+      "config": { "remove_extra_whitespace": true, "to_upper": true }
+    },
+    {
+      "id": "print",
+      "kind": "log_output",
+      "config": {}
+    }
+  ],
+  "edges": [
+    { "from": { "node": "fetch", "port": "body" }, "to": { "node": "title", "port": "json_str" } },
+    { "from": { "node": "title", "port": "value" }, "to": { "node": "clean", "port": "text" } },
+    { "from": { "node": "clean", "port": "cleaned" }, "to": { "node": "print", "port": "text" } }
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "graph_version": "0.1",
+  "nodes": [
+    {
+      "id": "flags",
+      "kind": "json_parse",
+      "config": { "json_str": "{\"user\": {\"is_admin\": false}}", "path": "user.is_admin" }
+    },
+    {
+      "id": "check",
+      "kind": "condition",
+      "config": { "true_branch": "welcome-admin", "false_branch": "wait" }
+    },
+    {
+      "id": "welcome-admin",
+      "kind": "log_output",
+      "config": { "text": "Witaj, adminie!" }
+    },
+    {
+      "id": "wait",
+      "kind": "delay",
+      "config": { "duration": "500ms" }
+    },
+    {
+      "id": "welcome-user",
+      "kind": "log_output",
+      "config": { "text": "Witaj, użytkowniku (po 500ms)." },
+      "after": ["wait"]
+    },
+    {
+      "id": "done",
+      "kind": "log_output",
+      "config": { "text": "Koniec - ten węzeł działa zawsze." }
+    }
+  ],
+  "edges": [
+    { "from": { "node": "flags", "port": "value" }, "to": { "node": "check", "port": "value" } }
+  ]
+}

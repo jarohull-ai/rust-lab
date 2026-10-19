@@ -1,0 +1,29 @@
+{
+  "graph_version": "0.1",
+  "nodes": [
+    {
+      "id": "read-1",
+      "kind": "fs_read",
+      "config": {
+        "path": "/home/jaro/Viper-Chat-v1.12.0-backup/RUST_LAB_POC/test.txt"
+      }
+    },
+    {
+      "id": "log-1",
+      "kind": "log_output",
+      "config": {}
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "node": "read-1",
+        "port": "content"
+      },
+      "to": {
+        "node": "log-1",
+        "port": "text"
+      }
+    }
+  ]
+}

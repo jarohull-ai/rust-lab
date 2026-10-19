@@ -1,0 +1,1 @@
+Witaj w Rust Lab! To jest test odczytu pliku.
