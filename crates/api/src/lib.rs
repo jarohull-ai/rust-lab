@@ -14,6 +14,7 @@ use std::collections::HashSet;
 use std::path::Path;
 use std::sync::Arc;
 use tower_http::cors::CorsLayer;
+use tower_http::services::ServeDir;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -82,13 +83,19 @@ pub struct ErrorResponse {
 }
 
 pub fn app(state: AppState) -> Router {
-    Router::new()
+    let mut router = Router::new()
         .route("/api/health", get(health_handler))
         .route("/api/nodes", get(nodes_handler))
         .route("/api/validate", post(validate_handler))
         .route("/api/execute", post(execute_handler))
         .route("/api/export", post(export_handler))
-        .route("/api/export/disk", post(export_disk_handler))
+        .route("/api/export/disk", post(export_disk_handler));
+
+    if Path::new("ui/dist").exists() {
+        router = router.fallback_service(ServeDir::new("ui/dist"));
+    }
+
+    router
         .layer(CorsLayer::permissive())
         .with_state(state)
 }

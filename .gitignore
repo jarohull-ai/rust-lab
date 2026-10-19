@@ -22,3 +22,9 @@ Thumbs.db
 # Generated / Temporary
 examples/*.json.bak
 *.bak
+
+# Node / UI
+**/node_modules/
+**/dist/
+ui/.env
+
