@@ -88,6 +88,7 @@ pub struct NodeSpec {
 pub struct NodeInstance {
     pub id: String,
     pub kind: String,
+    #[serde(default, alias = "params")]
     pub config: Value,
     /// Control dependencies: ids of nodes that must finish before this one runs.
     /// Used for ordering after nodes without outputs (e.g. `delay`, `log_output`).
@@ -112,6 +113,8 @@ pub struct GraphSpec {
     pub graph_version: String,
     pub nodes: Vec<NodeInstance>,
     pub edges: Vec<Edge>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub security: Option<Value>,
 }
 
 pub type NodeInput = HashMap<String, Value>;

@@ -7,6 +7,11 @@ pub struct FsWriteNode;
 
 pub fn fs_write(path: &str, content: &str) -> Result<()> {
     println!("   Writing to file: {}", path);
+    if let Some(parent) = std::path::Path::new(path).parent() {
+        if !parent.as_os_str().is_empty() {
+            std::fs::create_dir_all(parent)?;
+        }
+    }
     std::fs::write(path, content)?;
     Ok(())
 }

@@ -22,6 +22,8 @@ Thumbs.db
 # Generated / Temporary
 examples/*.json.bak
 *.bak
+data/output*
+data/converted*
 
 # Node / UI
 **/node_modules/

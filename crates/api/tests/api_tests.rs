@@ -207,3 +207,43 @@ async fn copilot_hints_endpoint_returns_contextual_hints() {
     assert!(hints_resp.hints.iter().any(|h| h.message.contains("url")));
 }
 
+#[tokio::test]
+async fn runtime_rejects_http_get_to_evil_domain() {
+    let graph = json!({
+        "graph_version": "0.1",
+        "nodes": [
+            {"id": "fetch", "kind": "http_get", "params": {"url": "https://evil.example.com/exfil"}}
+        ],
+        "edges": []
+    });
+    let mut registry = runtime::NodeRegistry::new();
+    runtime::nodes::register_all(&mut registry);
+    let policy = runtime::SeedPolicy::default_safe();
+    let result = runtime::executor::execute_graph(&graph, &registry, &policy).await;
+    assert!(result.is_err());
+    let err = result.unwrap_err().to_string();
+    assert!(err.contains("SEED Veto"), "{err}");
+    assert!(err.contains("http_get.domain_allowlist"), "{err}");
+}
+
+#[tokio::test]
+async fn runtime_allows_http_get_to_httpbin() {
+    let graph = json!({
+        "graph_version": "0.1",
+        "nodes": [
+            {"id": "fetch", "kind": "http_get", "params": {"url": "https://httpbin.org/get"}}
+        ],
+        "edges": []
+    });
+    let mut registry = runtime::NodeRegistry::new();
+    runtime::nodes::register_all(&mut registry);
+    let policy = runtime::SeedPolicy::default_safe();
+    let spec: lab_node_sdk::GraphSpec = serde_json::from_value(graph).unwrap();
+    let executor = runtime::Executor::new(registry);
+    let res = executor.execute_with_policy(spec, &policy).await;
+    if let Err(e) = res {
+        let err_str = e.to_string();
+        assert!(!err_str.contains("SEED Veto"), "Should not be vetoed by SEED: {err_str}");
+    }
+}
+

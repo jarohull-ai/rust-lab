@@ -28,6 +28,21 @@ impl Executor {
     }
 
     pub async fn execute(&self, graph: GraphSpec) -> Result<ExecutionReport> {
+        let mut policy = crate::seed::SeedPolicy::default_safe();
+        if let Some(security) = &graph.security {
+            if let Ok(extra) = serde_json::from_value::<crate::seed::SeedPolicy>(security.clone()) {
+                policy.merge_with(&extra);
+            }
+        }
+        policy.from_env();
+        self.execute_with_policy(graph, &policy).await
+    }
+
+    pub async fn execute_with_policy(
+        &self,
+        graph: GraphSpec,
+        policy: &crate::seed::SeedPolicy,
+    ) -> Result<ExecutionReport> {
         // Topological order over data, condition and `after` edges: every node's
         // dependencies (including its condition, if it is a branch) come before it.
         let order = plan::execution_order(&graph)?;
@@ -63,6 +78,13 @@ impl Executor {
             println!("🚀 Executing Node: {} [{}]", node.id, node.kind);
 
             let inputs = self.collect_inputs(&graph, &id, &report.outputs)?;
+
+            // SEED Policy Guard: evaluate before execution
+            let verdict = crate::seed::evaluate_node_inputs(&node.kind, &inputs, policy);
+            if let crate::seed::SeedVerdict::Denied { reason, rule } = verdict {
+                return Err(anyhow!("SEED Veto [{rule}]: {reason}"));
+            }
+
             for pin in spec.inputs.iter().filter(|p| p.required) {
                 if inputs.get(&pin.name).is_none_or(Value::is_null) {
                     return Err(anyhow!(
@@ -155,6 +177,18 @@ impl Executor {
         }
         Ok(inputs)
     }
+}
+
+/// Convenience helper to execute a JSON graph value with a specified policy.
+pub async fn execute_graph(
+    graph: &Value,
+    registry: &NodeRegistry,
+    policy: &crate::seed::SeedPolicy,
+) -> Result<ExecutionReport> {
+    let spec: GraphSpec = serde_json::from_value(graph.clone())
+        .map_err(|e| anyhow!("Failed to deserialize graph: {e}"))?;
+    let executor = Executor::new(registry.clone());
+    executor.execute_with_policy(spec, policy).await
 }
 
 #[cfg(test)]
@@ -260,7 +294,7 @@ mod tests {
                 {"id": "parse", "kind": "json_parse", "config": {"json_str": "{\"flag\": true, \"filename\": \"output.txt\"}", "path": "flag"}},
                 {"id": "to_bool", "kind": "json_to_bool", "config": {}},
                 {"id": "cond", "kind": "condition", "config": {"true_branch": "str_path", "false_branch": "skip_node"}},
-                {"id": "str_path", "kind": "string_to_path", "config": {"path": "/tmp/converted.txt"}},
+                {"id": "str_path", "kind": "string_to_path", "config": {"path": "data/converted.txt"}},
                 {"id": "skip_node", "kind": "log_output", "config": {"text": "skipped"}},
                 {"id": "write", "kind": "fs_write", "config": {"content": "hello from converter"}, "after": ["str_path"]}
             ],
@@ -278,6 +312,65 @@ mod tests {
         assert!(report.executed.contains(&"str_path".to_string()));
         assert!(report.executed.contains(&"write".to_string()));
         assert!(report.skipped.contains(&"skip_node".to_string()));
-        let _ = std::fs::remove_file("/tmp/converted.txt");
+        let _ = std::fs::remove_file("data/converted.txt");
+    }
+
+    #[tokio::test]
+    async fn seed_veto_rejects_evil_domain_http_get() {
+        let g = graph(json!({
+            "graph_version": "0.1",
+            "nodes": [
+                {"id": "fetch", "kind": "http_get", "config": {"url": "https://evil.example.com/exfiltrate"}}
+            ],
+            "edges": []
+        }));
+        let err = executor().execute(g).await.unwrap_err().to_string();
+        assert!(err.contains("SEED Veto"), "{err}");
+        assert!(err.contains("http_get.domain_allowlist"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn seed_veto_rejects_absolute_path_fs_write() {
+        let g = graph(json!({
+            "graph_version": "0.1",
+            "nodes": [
+                {"id": "write", "kind": "fs_write", "config": {"path": "/etc/shadow", "content": "bad"}}
+            ],
+            "edges": []
+        }));
+        let err = executor().execute(g).await.unwrap_err().to_string();
+        assert!(err.contains("SEED Veto"), "{err}");
+        assert!(err.contains("fs_write.absolute_path"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn seed_veto_rejects_denied_read_path_fs_read() {
+        let g = graph(json!({
+            "graph_version": "0.1",
+            "nodes": [
+                {"id": "read", "kind": "fs_read", "config": {"path": "/etc/passwd"}}
+            ],
+            "edges": []
+        }));
+        let err = executor().execute(g).await.unwrap_err().to_string();
+        assert!(err.contains("SEED Veto"), "{err}");
+        assert!(err.contains("fs_read.path_denylist"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn seed_policy_allows_extended_domain_from_graph_security() {
+        let g = graph(json!({
+            "graph_version": "0.1",
+            "security": {
+                "allowed_domains": ["custom-partner-api.org"]
+            },
+            "nodes": [
+                {"id": "fetch", "kind": "http_get", "config": {"url": "https://custom-partner-api.org/data"}}
+            ],
+            "edges": []
+        }));
+        // Since custom-partner-api.org won't resolve in sandbox, we just verify SEED didn't veto it!
+        let err = executor().execute(g).await.unwrap_err().to_string();
+        assert!(!err.contains("SEED Veto"), "SEED should not have vetoed allowed domain: {err}");
     }
 }

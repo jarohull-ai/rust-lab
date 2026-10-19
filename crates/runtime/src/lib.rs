@@ -4,6 +4,7 @@ pub mod executor;
 pub mod nodes;
 pub mod plan;
 pub mod registry;
+pub mod seed;
 pub mod validator;
 
 pub use codegen::{
@@ -13,4 +14,5 @@ pub use copilot::{generate_hints, Hint, HintSeverity};
 pub use executor::{ExecutionReport, Executor};
 pub use nodes::register_all;
 pub use registry::NodeRegistry;
+pub use seed::{SeedPolicy, SeedVerdict};
 pub use validator::Validator;
