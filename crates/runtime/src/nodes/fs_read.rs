@@ -39,6 +39,8 @@ impl ViperNode for FsReadNode {
     async fn execute(&self, input: NodeInput) -> Result<NodeOutput, anyhow::Error> {
         let path = input
             .get("path")
+            .or_else(|| input.get("file_path"))
+            .or_else(|| input.get("filepath"))
             .ok_or_else(|| anyhow::anyhow!("fs_read node requires a 'path' parameter"))?
             .as_str()
             .ok_or_else(|| anyhow::anyhow!("path parameter must be a string"))?;

@@ -74,12 +74,22 @@ impl<'a> Validator<'a> {
             }
         }
 
-        // 3. Static config validation: verify types against declared input pins.
+        // 3. Static config validation: verify types against declared input pins & check required inputs.
         for node in &graph.nodes {
             let spec = &specs[node.id.as_str()];
-            if let serde_json::Value::Object(map) = &node.config {
+            let config_map = match &node.config {
+                serde_json::Value::Object(map) => Some(map),
+                _ => None,
+            };
+
+            if let Some(map) = config_map {
                 for (key, val) in map {
-                    if let Some(pin) = spec.inputs.iter().find(|p| &p.name == key) {
+                    let key_lower = key.to_lowercase();
+                    if let Some(pin) = spec
+                        .inputs
+                        .iter()
+                        .find(|p| p.name.to_lowercase() == key_lower || (p.name == "path" && (key_lower == "file_path" || key_lower == "filepath")))
+                    {
                         if !pin.pin_type.matches_value(val) {
                             return Err(anyhow!(
                                 "Config type mismatch on node '{}', pin '{}': expected {}, got {}",
@@ -90,6 +100,43 @@ impl<'a> Validator<'a> {
                             ));
                         }
                     }
+                }
+            }
+
+            // Check that every required input is supplied either by an incoming edge or config.
+            for pin in spec.inputs.iter().filter(|p| p.required) {
+                let pin_lower = pin.name.to_lowercase();
+                let has_incoming_edge = graph.edges.iter().any(|e| {
+                    e.to.node == node.id
+                        && (e.to.port.to_lowercase() == pin_lower
+                            || (pin.name == "path" && (e.to.port.to_lowercase() == "file_path" || e.to.port.to_lowercase() == "filepath")))
+                });
+
+                let has_valid_config = config_map.is_some_and(|map| {
+                    let val = map
+                        .get(&pin.name)
+                        .or_else(|| map.get(&pin_lower))
+                        .or_else(|| {
+                            if pin.name == "path" {
+                                map.get("file_path").or_else(|| map.get("filepath"))
+                            } else {
+                                None
+                            }
+                        });
+                    match val {
+                        Some(serde_json::Value::Null) | None => false,
+                        Some(serde_json::Value::String(s)) => !s.trim().is_empty(),
+                        Some(_) => true,
+                    }
+                });
+
+                if !has_incoming_edge && !has_valid_config {
+                    return Err(anyhow!(
+                        "Graph is invalid: node '{}' [{}] missing required input '{}'",
+                        node.id,
+                        node.kind,
+                        pin.name
+                    ));
                 }
             }
         }
@@ -327,4 +374,35 @@ mod tests {
         .to_string();
         assert!(cycle.contains("Cycle detected"), "{cycle}");
     }
+
+    #[test]
+    fn rejects_missing_required_input_pin() {
+        let err = validate(json!({
+            "graph_version": "0.1",
+            "nodes": [
+                {"id": "reader", "kind": "fs_read", "config": {}}
+            ],
+            "edges": []
+        }))
+        .unwrap_err()
+        .to_string();
+
+        assert!(
+            err.contains("Graph is invalid: node 'reader' [fs_read] missing required input 'path'"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn accepts_file_path_alias_and_lowercase() {
+        let res = validate(json!({
+            "graph_version": "0.1",
+            "nodes": [
+                {"id": "reader", "kind": "fs_read", "config": {"file_path": "test.txt"}}
+            ],
+            "edges": []
+        }));
+        assert!(res.is_ok());
+    }
 }
+

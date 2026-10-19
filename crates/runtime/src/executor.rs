@@ -125,7 +125,18 @@ impl Executor {
         let mut inputs: NodeInput = node
             .config
             .as_object()
-            .map(|obj| obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
+            .map(|obj| {
+                let mut map = HashMap::new();
+                for (k, v) in obj {
+                    let k_lower = k.to_lowercase();
+                    map.insert(k.clone(), v.clone());
+                    map.insert(k_lower.clone(), v.clone());
+                    if k_lower == "file_path" || k_lower == "filepath" {
+                        map.insert("path".to_string(), v.clone());
+                    }
+                }
+                map
+            })
             .unwrap_or_default();
 
         for edge in graph.edges.iter().filter(|e| e.to.node == id) {
@@ -133,9 +144,13 @@ impl Executor {
             // the required-input check reports it if the pin was mandatory.
             if let Some(val) = results
                 .get(&edge.from.node)
-                .and_then(|o| o.get(&edge.from.port))
+                .and_then(|o| o.get(&edge.from.port).or_else(|| o.get(&edge.from.port.to_lowercase())))
             {
                 inputs.insert(edge.to.port.clone(), val.clone());
+                inputs.insert(edge.to.port.to_lowercase(), val.clone());
+                if edge.to.port.to_lowercase() == "file_path" || edge.to.port.to_lowercase() == "filepath" {
+                    inputs.insert("path".to_string(), val.clone());
+                }
             }
         }
         Ok(inputs)

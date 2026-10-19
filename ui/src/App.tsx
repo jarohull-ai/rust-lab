@@ -103,6 +103,7 @@ export const App: React.FC = () => {
 
   // 2. Helper to build GraphSpec from current ReactFlow nodes & edges
   const buildGraphSpec = useCallback((): GraphSpec => {
+    const activeNodeIds = new Set(nodes.map((n) => n.id));
     return {
       graph_version: '0.1',
       nodes: nodes.map((n) => ({
@@ -111,7 +112,7 @@ export const App: React.FC = () => {
         config: (n.data.config as Record<string, any>) || {},
       })),
       edges: edges
-        .filter((e) => e.sourceHandle && e.targetHandle)
+        .filter((e) => activeNodeIds.has(e.source) && activeNodeIds.has(e.target) && e.sourceHandle && e.targetHandle)
         .map((e) => ({
           from: { node: e.source, port: e.sourceHandle as string },
           to: { node: e.target, port: e.targetHandle as string },
@@ -173,6 +174,11 @@ export const App: React.FC = () => {
     setNodes((nds) => nds.filter((n) => n.id !== nodeId));
     setEdges((eds) => eds.filter((e) => e.source !== nodeId && e.target !== nodeId));
   }, [setNodes, setEdges]);
+
+  const onNodesDelete = useCallback((deletedNodes: Node[]) => {
+    const deletedIds = new Set(deletedNodes.map((n) => n.id));
+    setEdges((eds) => eds.filter((e) => !deletedIds.has(e.source) && !deletedIds.has(e.target)));
+  }, [setEdges]);
 
   // 6. Connect Handles
   const onConnect = useCallback(
@@ -548,6 +554,7 @@ export const App: React.FC = () => {
               edges={edges}
               onNodesChange={onNodesChange}
               onEdgesChange={onEdgesChange}
+              onNodesDelete={onNodesDelete}
               onConnect={onConnect}
               nodeTypes={nodeTypes}
               fitView

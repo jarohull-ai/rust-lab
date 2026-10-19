@@ -41,6 +41,7 @@ impl ViperNode for StringToPathNode {
     async fn execute(&self, input: NodeInput) -> Result<NodeOutput> {
         let raw = input
             .get("path")
+            .or_else(|| input.get("file_path"))
             .or_else(|| input.get("text"))
             .ok_or_else(|| anyhow!("string_to_path requires a 'path' input"))?
             .as_str()

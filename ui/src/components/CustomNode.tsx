@@ -137,11 +137,14 @@ export const CustomNode = memo(({ id, data }: CustomNodeProps) => {
 
           {kind === 'fs_read' && (
             <div>
-              <label className="text-[10px] uppercase text-slate-400 font-semibold">File Path</label>
+              <label className="text-[10px] uppercase text-slate-400 font-semibold">File Path (path)</label>
               <input
                 type="text"
-                value={config.path || ''}
-                onChange={(e) => onConfigChange(id, 'path', e.target.value)}
+                value={config.path || config.file_path || ''}
+                onChange={(e) => {
+                  onConfigChange(id, 'path', e.target.value);
+                  onConfigChange(id, 'file_path', e.target.value);
+                }}
                 placeholder="data/input.txt"
                 className="w-full text-xs font-mono px-2 py-1 rounded bg-slate-950 border border-slate-800 focus:border-orange-500 outline-none text-slate-100"
               />
@@ -150,11 +153,14 @@ export const CustomNode = memo(({ id, data }: CustomNodeProps) => {
 
           {kind === 'fs_write' && (
             <div className="space-y-1">
-              <label className="text-[10px] uppercase text-slate-400 font-semibold">Static Path</label>
+              <label className="text-[10px] uppercase text-slate-400 font-semibold">Path (path)</label>
               <input
                 type="text"
-                value={config.path || ''}
-                onChange={(e) => onConfigChange(id, 'path', e.target.value)}
+                value={config.path || config.file_path || ''}
+                onChange={(e) => {
+                  onConfigChange(id, 'path', e.target.value);
+                  onConfigChange(id, 'file_path', e.target.value);
+                }}
                 placeholder="output.txt"
                 className="w-full text-xs font-mono px-2 py-1 rounded bg-slate-950 border border-slate-800 focus:border-orange-500 outline-none text-slate-100"
               />
