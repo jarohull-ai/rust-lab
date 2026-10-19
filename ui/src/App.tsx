@@ -175,6 +175,15 @@ export const App: React.FC = () => {
     setEdges((eds) => eds.filter((e) => e.source !== nodeId && e.target !== nodeId));
   }, [setNodes, setEdges]);
 
+  const handleFocusNode = useCallback((nodeId: string) => {
+    setNodes((nds) =>
+      nds.map((n) => ({
+        ...n,
+        selected: n.id === nodeId,
+      }))
+    );
+  }, [setNodes]);
+
   const onNodesDelete = useCallback((deletedNodes: Node[]) => {
     const deletedIds = new Set(deletedNodes.map((n) => n.id));
     setEdges((eds) => eds.filter((e) => !deletedIds.has(e.source) && !deletedIds.has(e.target)));
@@ -530,11 +539,13 @@ export const App: React.FC = () => {
     <div className="flex flex-col h-screen w-screen bg-slate-950 font-sans text-slate-100 select-none">
       {/* Top Navigation & Actions */}
       <Toolbar
+        graph={buildGraphSpec()}
         onValidate={handleValidate}
         onExecute={handleExecute}
         onExportDisk={handleExportDisk}
         onClear={handleClear}
         onLoadExample={handleLoadExample}
+        onFocusNode={handleFocusNode}
         apiConnected={apiConnected}
         isValidating={isValidating}
         isExecuting={isExecuting}

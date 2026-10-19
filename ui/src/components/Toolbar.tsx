@@ -9,13 +9,17 @@ import {
   Cpu,
   Layers,
 } from 'lucide-react';
+import { CopilotButton } from './CopilotButton';
+import { GraphSpec } from '../types';
 
 interface ToolbarProps {
+  graph: GraphSpec;
   onValidate: () => void;
   onExecute: () => void;
   onExportDisk: () => void;
   onClear: () => void;
   onLoadExample: (exampleName: 'condition' | 'text' | 'http') => void;
+  onFocusNode?: (nodeId: string) => void;
   apiConnected: boolean;
   isValidating: boolean;
   isExecuting: boolean;
@@ -23,11 +27,13 @@ interface ToolbarProps {
 }
 
 export const Toolbar: React.FC<ToolbarProps> = ({
+  graph,
   onValidate,
   onExecute,
   onExportDisk,
   onClear,
   onLoadExample,
+  onFocusNode,
   apiConnected,
   isValidating,
   isExecuting,
@@ -117,6 +123,9 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             </div>
           )}
         </div>
+
+        {/* Copilot AI (SEED Engine) */}
+        <CopilotButton graph={graph} onFocusNode={onFocusNode} />
 
         {/* Validate Graph */}
         <button

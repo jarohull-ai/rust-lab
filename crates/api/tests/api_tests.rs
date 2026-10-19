@@ -180,3 +180,30 @@ async fn export_disk_endpoint_writes_generated_project_to_temp_dir() {
 
     let _ = std::fs::remove_dir_all(&temp_out);
 }
+
+#[tokio::test]
+async fn copilot_hints_endpoint_returns_contextual_hints() {
+    let router = app(AppState::default());
+    let graph = json!({
+        "graph_version": "0.1",
+        "nodes": [
+            {"id": "fetch", "kind": "http_get", "config": {}}
+        ],
+        "edges": []
+    });
+
+    let req = Request::builder()
+        .uri("/api/copilot/hints")
+        .method(Method::POST)
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(serde_json::to_vec(&graph).unwrap()))
+        .unwrap();
+
+    let res = router.oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let hints_resp: api::HintsResponse = serde_json::from_slice(&body).unwrap();
+    assert!(!hints_resp.hints.is_empty());
+    assert!(hints_resp.hints.iter().any(|h| h.message.contains("url")));
+}
+
