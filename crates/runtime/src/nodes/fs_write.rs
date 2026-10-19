@@ -15,7 +15,7 @@ impl ViperNode for FsWriteNode {
             inputs: vec![
                 TypedPin {
                     name: "path".into(),
-                    pin_type: PinType::String,
+                    pin_type: PinType::FilePath,
                     required: true,
                     description: "Path to the file".into(),
                 },

@@ -235,4 +235,33 @@ mod tests {
         let err = executor().execute(g).await.unwrap_err().to_string();
         assert!(err.contains("missing required input 'text'"), "{err}");
     }
+
+    #[tokio::test]
+    async fn converter_nodes_pipe_json_to_bool_and_string_to_path() {
+        let g = graph(json!({
+            "graph_version": "0.1",
+            "nodes": [
+                {"id": "parse", "kind": "json_parse", "config": {"json_str": "{\"flag\": true, \"filename\": \"output.txt\"}", "path": "flag"}},
+                {"id": "to_bool", "kind": "json_to_bool", "config": {}},
+                {"id": "cond", "kind": "condition", "config": {"true_branch": "str_path", "false_branch": "skip_node"}},
+                {"id": "str_path", "kind": "string_to_path", "config": {"path": "/tmp/converted.txt"}},
+                {"id": "skip_node", "kind": "log_output", "config": {"text": "skipped"}},
+                {"id": "write", "kind": "fs_write", "config": {"content": "hello from converter"}, "after": ["str_path"]}
+            ],
+            "edges": [
+                {"from": {"node": "parse", "port": "value"}, "to": {"node": "to_bool", "port": "value"}},
+                {"from": {"node": "to_bool", "port": "value"}, "to": {"node": "cond", "port": "value"}},
+                {"from": {"node": "str_path", "port": "path"}, "to": {"node": "write", "port": "path"}}
+            ]
+        }));
+        let mut reg = NodeRegistry::new();
+        crate::nodes::register_all(&mut reg);
+        crate::validator::Validator::new(&reg).validate(&g).unwrap();
+
+        let report = executor().execute(g).await.unwrap();
+        assert!(report.executed.contains(&"str_path".to_string()));
+        assert!(report.executed.contains(&"write".to_string()));
+        assert!(report.skipped.contains(&"skip_node".to_string()));
+        let _ = std::fs::remove_file("/tmp/converted.txt");
+    }
 }

@@ -15,7 +15,7 @@ impl ViperNode for FsReadNode {
             description: "Reads content from a file".into(),
             inputs: vec![TypedPin {
                 name: "path".into(),
-                pin_type: PinType::String,
+                pin_type: PinType::FilePath,
                 required: true,
                 description: "Path to the file".into(),
             }],

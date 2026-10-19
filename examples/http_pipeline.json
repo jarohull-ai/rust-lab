@@ -12,6 +12,11 @@
       "config": { "path": "slideshow.title" }
     },
     {
+      "id": "to_str",
+      "kind": "json_to_string",
+      "config": {}
+    },
+    {
       "id": "clean",
       "kind": "text_clean",
       "config": { "remove_extra_whitespace": true, "to_upper": true }
@@ -24,7 +29,8 @@
   ],
   "edges": [
     { "from": { "node": "fetch", "port": "body" }, "to": { "node": "title", "port": "json_str" } },
-    { "from": { "node": "title", "port": "value" }, "to": { "node": "clean", "port": "text" } },
+    { "from": { "node": "title", "port": "value" }, "to": { "node": "to_str", "port": "value" } },
+    { "from": { "node": "to_str", "port": "text" }, "to": { "node": "clean", "port": "text" } },
     { "from": { "node": "clean", "port": "cleaned" }, "to": { "node": "print", "port": "text" } }
   ]
 }

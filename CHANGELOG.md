@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 ### Added
+- **Phase 4.5: Converter Nodes**:
+  - `string_to_path`: explicitly converts and validates a `String` to a `FilePath`.
+  - `json_to_string`: converts parsed `Json` values (strings, numbers, objects) to `String`.
+  - `json_to_bool`: converts parsed `Json` values (booleans, strings, numbers) to `Boolean`.
+  - Configured `fs_read` and `fs_write` to use `PinType::FilePath` for strict path safety.
+  - End-to-end converter pipeline unit tests and updated runnable examples.
 - **Phase 4: Extended Validation & Typed Pins**:
   - `PinType::is_compatible_with` for strict type checking on edges (`String`, `Number`, `Boolean`, `Json`, `HttpResponse`, `FilePath`, `Any`).
   - Strict isolation of `FilePath` from `String` (fail-fast, requiring explicit conversion).

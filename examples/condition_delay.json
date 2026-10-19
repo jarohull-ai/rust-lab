@@ -7,6 +7,11 @@
       "config": { "json_str": "{\"user\": {\"is_admin\": false}}", "path": "user.is_admin" }
     },
     {
+      "id": "as_bool",
+      "kind": "json_to_bool",
+      "config": {}
+    },
+    {
       "id": "check",
       "kind": "condition",
       "config": { "true_branch": "welcome-admin", "false_branch": "wait" }
@@ -34,6 +39,7 @@
     }
   ],
   "edges": [
-    { "from": { "node": "flags", "port": "value" }, "to": { "node": "check", "port": "value" } }
+    { "from": { "node": "flags", "port": "value" }, "to": { "node": "as_bool", "port": "value" } },
+    { "from": { "node": "as_bool", "port": "value" }, "to": { "node": "check", "port": "value" } }
   ]
 }

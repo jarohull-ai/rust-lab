@@ -81,14 +81,17 @@ Rust Lab enforces strict type checking at validation time to catch wiring errors
 
 | kind | inputs (required*) | outputs | notes |
 |------|--------------------|---------|-------|
-| `http_get` | `url`* | `body` | network |
-| `fs_read` | `path`* | `content` | |
-| `fs_write` | `path`*, `content`* | – | writes to disk |
-| `log_output` | `text`* | – | prints to console |
-| `json_parse` | `json_str`*, `path` | `value` | dot path, numeric segments index arrays |
-| `text_clean` | `text`*, `trim` (default true), `remove_extra_whitespace`, `to_lower`, `to_upper` | `cleaned` | `to_lower` + `to_upper` is an error |
-| `condition` | `value`* (bool), `true_branch`*, `false_branch`* | – | control flow |
-| `delay` | `duration`* (`150ms`, `3s`, `2m`; max 10m) | – | |
+| `http_get` | `url`* (string) | `body` (string) | network |
+| `fs_read` | `path`* (file_path) | `content` (string) | |
+| `fs_write` | `path`* (file_path), `content`* (string) | – | writes to disk |
+| `log_output` | `text`* (any) | – | prints to console |
+| `json_parse` | `json_str`* (string), `path` (string) | `value` (json) | dot path, numeric segments index arrays |
+| `text_clean` | `text`* (string), `trim` (bool), `remove_extra_whitespace` (bool), `to_lower` (bool), `to_upper` (bool) | `cleaned` (string) | `to_lower` + `to_upper` is an error |
+| `condition` | `value`* (boolean), `true_branch`* (string), `false_branch`* (string) | – | control flow (`__next__`/`__skip__`) |
+| `delay` | `duration`* (string) | – | `150ms`, `3s`, `2m`; max 10m |
+| `string_to_path` | `path`* (string) | `path` (file_path) | explicit string to filesystem path converter |
+| `json_to_string` | `value`* (json) | `text` (string) | JSON string/number/object to string |
+| `json_to_bool` | `value`* (json) | `value` (boolean) | JSON boolean/string/number to boolean |
 
 ## Example JSON
 ```json
@@ -97,12 +100,14 @@ Rust Lab enforces strict type checking at validation time to catch wiring errors
   "nodes": [
     { "id": "fetch", "kind": "http_get", "config": { "url": "https://httpbin.org/json" } },
     { "id": "title", "kind": "json_parse", "config": { "path": "slideshow.title" } },
+    { "id": "as_str", "kind": "json_to_string", "config": {} },
     { "id": "wait", "kind": "delay", "config": { "duration": "1s" } },
     { "id": "print", "kind": "log_output", "config": {}, "after": ["wait"] }
   ],
   "edges": [
     { "from": { "node": "fetch", "port": "body" }, "to": { "node": "title", "port": "json_str" } },
-    { "from": { "node": "title", "port": "value" }, "to": { "node": "print", "port": "text" } }
+    { "from": { "node": "title", "port": "value" }, "to": { "node": "as_str", "port": "value" } },
+    { "from": { "node": "as_str", "port": "text" }, "to": { "node": "print", "port": "text" } }
   ]
 }
 ```
