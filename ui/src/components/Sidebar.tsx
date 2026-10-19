@@ -1,4 +1,5 @@
 import React from 'react';
+import { useI18n } from '../i18n';
 import { NodeSpec, PIN_COLORS, PinType } from '../types';
 import {
   Globe,
@@ -20,17 +21,17 @@ interface SidebarProps {
 }
 
 const CATEGORY_MAP: Record<string, string> = {
-  http_get: 'Network & I/O',
-  fs_read: 'Network & I/O',
-  fs_write: 'Network & I/O',
-  log_output: 'Network & I/O',
-  json_parse: 'Transformation',
-  text_clean: 'Transformation',
-  condition: 'Control Flow',
-  delay: 'Control Flow',
-  string_to_path: 'Type Converters',
-  json_to_string: 'Type Converters',
-  json_to_bool: 'Type Converters',
+  http_get: 'network',
+  fs_read: 'network',
+  fs_write: 'network',
+  log_output: 'network',
+  json_parse: 'transformation',
+  text_clean: 'transformation',
+  condition: 'control',
+  delay: 'control',
+  string_to_path: 'converters',
+  json_to_string: 'converters',
+  json_to_bool: 'converters',
 };
 
 const KIND_ICONS: Record<string, React.ReactNode> = {
@@ -48,34 +49,35 @@ const KIND_ICONS: Record<string, React.ReactNode> = {
 };
 
 export const Sidebar: React.FC<SidebarProps> = ({ nodeSpecs, onAddNode }) => {
+  const { t } = useI18n();
   const onDragStart = (event: React.DragEvent, nodeType: string) => {
     event.dataTransfer.setData('application/reactflow', nodeType);
     event.dataTransfer.effectAllowed = 'move';
   };
 
-  const categories = ['Network & I/O', 'Transformation', 'Control Flow', 'Type Converters'];
+  const categories = ['network', 'transformation', 'control', 'converters'];
 
   return (
     <aside className="w-72 bg-slate-900/90 border-r border-slate-800 flex flex-col h-full overflow-hidden select-none">
       {/* Header */}
       <div className="p-4 border-b border-slate-800 flex items-center gap-2">
         <Layers className="w-4 h-4 text-orange-400" />
-        <span className="font-semibold text-sm tracking-wide text-slate-100">Node Palette</span>
+        <span className="font-semibold text-sm tracking-wide text-slate-100">{t('sidebar.title')}</span>
         <span className="ml-auto text-xs font-mono text-slate-400 bg-slate-800 px-1.5 py-0.5 rounded">
-          {nodeSpecs.length} nodes
+          {t('sidebar.count', { count: nodeSpecs.length })}
         </span>
       </div>
 
       {/* Palette Categories */}
       <div className="flex-1 overflow-y-auto p-3 space-y-4">
         {categories.map((cat) => {
-          const nodesInCat = nodeSpecs.filter((s) => (CATEGORY_MAP[s.name] || 'Other') === cat);
+          const nodesInCat = nodeSpecs.filter((s) => CATEGORY_MAP[s.name] === cat);
           if (nodesInCat.length === 0) return null;
 
           return (
             <div key={cat} className="space-y-2">
               <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 pl-1">
-                {cat}
+                {t(`category.${cat}`)}
               </span>
               <div className="space-y-1.5">
                 {nodesInCat.map((spec) => (
@@ -97,13 +99,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ nodeSpecs, onAddNode }) => {
                         <button
                           type="button"
                           className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-slate-700 text-slate-400 hover:text-slate-100 transition-opacity"
-                          title="Add to Canvas"
+                          title={t('sidebar.add')}
                         >
                           <Plus className="w-3 h-3" />
                         </button>
                       </div>
                       <p className="text-[11px] text-slate-400 line-clamp-1 mt-0.5">
-                        {spec.description}
+                        {t(`node.${spec.name}.description`)}
                       </p>
 
                       {/* Pins preview pills */}
@@ -114,7 +116,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ nodeSpecs, onAddNode }) => {
                             <span
                               key={`in-${pin.name}`}
                               className={`text-[9px] font-mono px-1 rounded ${c.bg} ${c.text}`}
-                              title={`Input ${pin.name} (${pin.pin_type})`}
+                              title={t('pin.input', { name: pin.name, type: pin.pin_type })}
                             >
                               →{pin.name}
                             </span>
@@ -126,7 +128,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ nodeSpecs, onAddNode }) => {
                             <span
                               key={`out-${pin.name}`}
                               className={`text-[9px] font-mono px-1 rounded ${c.bg} ${c.text}`}
-                              title={`Output ${pin.name} (${pin.pin_type})`}
+                              title={t('pin.output', { name: pin.name, type: pin.pin_type })}
                             >
                               {pin.name}→
                             </span>
@@ -143,7 +145,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ nodeSpecs, onAddNode }) => {
       </div>
 
       <div className="p-3 border-t border-slate-800 text-[11px] text-slate-500 bg-slate-950/40">
-        💡 Drag node to canvas or click to add.
+        💡 {t('sidebar.drag')}
       </div>
     </aside>
   );

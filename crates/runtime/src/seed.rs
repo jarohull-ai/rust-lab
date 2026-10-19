@@ -1,15 +1,13 @@
-//! SEED Policy Guard – deterministyczne reguły bezpieczeństwa
-//! uruchamiane PRZED wykonaniem node'a.
+//! SEED Policy Guard: deterministic safety rules evaluated before node execution.
 //!
-//! Zapewnia, że `http_get` nie wyjdzie na nieznaną domenę,
-//! `fs_write` nie zapisze poza workspace, a `fs_read` nie
-//! odczyta plików wrażliwych.
+//! It prevents `http_get` from reaching unknown domains, restricts `fs_write`
+//! to configured directories, and denies sensitive `fs_read` paths.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 
-/// Wynik werdyktu SEED.
+/// Result of a SEED policy evaluation.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SeedVerdict {
     Allowed,
@@ -36,16 +34,16 @@ impl SeedVerdict {
     }
 }
 
-/// Polityka bezpieczeństwa – konfigurowalna przez `graph.json` lub env.
+/// Safety policy configurable through `graph.json` or the environment.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SeedPolicy {
-    /// Allowlista domen dla `http_get` (uzupełniana z `RUST_LAB_ALLOWED_DOMAINS`).
+    /// Domain allowlist for `http_get`, extended by `RUST_LAB_ALLOWED_DOMAINS`.
     #[serde(default)]
     pub allowed_domains: Vec<String>,
-    /// Allowlista katalogów dla `fs_write` (domyślnie: `data/`, `output/`).
+    /// Directory allowlist for `fs_write` (defaults to `data/` and `output/`).
     #[serde(default)]
     pub allowed_write_dirs: Vec<String>,
-    /// Denylist ścieżek dla `fs_read` (domyślnie: `/etc`, `/root`, `.ssh`, `.env`, `.git`).
+    /// Path denylist for `fs_read`.
     #[serde(default)]
     pub denied_read_paths: Vec<String>,
 }
@@ -57,7 +55,7 @@ impl Default for SeedPolicy {
 }
 
 impl SeedPolicy {
-    /// Domyślna polityka – bezpieczna dla uczniów.
+    /// Default policy intended for a local learning environment.
     pub fn default_safe() -> Self {
         Self {
             allowed_domains: vec![
@@ -80,7 +78,7 @@ impl SeedPolicy {
         }
     }
 
-    /// Rozszerza politykę o wartości z `graph.json` (`security`).
+    /// Extends the policy with values from the graph's `security` object.
     pub fn merge_with(&mut self, extra: &SeedPolicy) {
         for domain in &extra.allowed_domains {
             if !self.allowed_domains.contains(domain) {
@@ -99,7 +97,7 @@ impl SeedPolicy {
         }
     }
 
-    /// Rozszerza politykę o zmienną środowiskową `RUST_LAB_ALLOWED_DOMAINS`.
+    /// Extends the domain allowlist from `RUST_LAB_ALLOWED_DOMAINS`.
     pub fn from_env(&mut self) {
         if let Ok(extra) = std::env::var("RUST_LAB_ALLOWED_DOMAINS") {
             for domain in extra.split(',') {
@@ -113,11 +111,7 @@ impl SeedPolicy {
 }
 
 /// Ewaluacja node'a przed wykonaniem (przyjmuje `serde_json::Value`).
-pub fn evaluate_node(
-    node_kind: &str,
-    params: &Value,
-    policy: &SeedPolicy,
-) -> SeedVerdict {
+pub fn evaluate_node(node_kind: &str, params: &Value, policy: &SeedPolicy) -> SeedVerdict {
     let mut map = HashMap::new();
     if let Some(obj) = params.as_object() {
         for (k, v) in obj {
@@ -128,7 +122,7 @@ pub fn evaluate_node(
     evaluate_node_inputs(node_kind, &map, policy)
 }
 
-/// Ewaluacja node'a z wejściami `HashMap<String, Value>` zebranymi przez executor.
+/// Evaluates the node inputs collected by the executor.
 pub fn evaluate_node_inputs(
     node_kind: &str,
     inputs: &HashMap<String, Value>,
@@ -145,10 +139,10 @@ pub fn evaluate_node_inputs(
 fn evaluate_http_get(params: &HashMap<String, Value>, policy: &SeedPolicy) -> SeedVerdict {
     let url = match params.get("url").and_then(|v| v.as_str()) {
         Some(u) => u,
-        None => return SeedVerdict::Allowed, // brak URL – walidacja złapie to wcześniej
+        None => return SeedVerdict::Allowed, // Input validation reports the missing URL.
     };
 
-    // Parsowanie hosta z URL (bez konieczności zewnętrznego crate'a)
+    // Extract the host without adding another dependency.
     let host = url
         .trim_start_matches("https://")
         .trim_start_matches("http://")
@@ -187,7 +181,7 @@ fn evaluate_fs_write(params: &HashMap<String, Value>, policy: &SeedPolicy) -> Se
         None => return SeedVerdict::Allowed,
     };
 
-    // Zawsze blokuj ścieżki absolutne lub próby ucieczki (..) poza workspace
+    // Always reject absolute paths and parent-directory traversal.
     if path.starts_with('/') || path.starts_with('~') || path.contains("..") {
         return SeedVerdict::Denied {
             reason: format!("Absolute path or traversal '{path}' is not allowed"),
@@ -195,7 +189,7 @@ fn evaluate_fs_write(params: &HashMap<String, Value>, policy: &SeedPolicy) -> Se
         };
     }
 
-    // Sprawdź, czy ścieżka zaczyna się od dozwolonego katalogu
+    // Require the path to start with an allowed directory.
     let norm_path = path.trim_start_matches("./");
     if policy.allowed_write_dirs.iter().any(|d| {
         let norm_d = d.trim_start_matches("./");
@@ -251,7 +245,11 @@ mod tests {
     #[test]
     fn allows_known_domain() {
         let p = policy();
-        let v = evaluate_node("http_get", &json!({"url": "https://api.github.com/zen"}), &p);
+        let v = evaluate_node(
+            "http_get",
+            &json!({"url": "https://api.github.com/zen"}),
+            &p,
+        );
         assert_eq!(v, SeedVerdict::Allowed);
     }
 

@@ -23,9 +23,11 @@ import {
   ValidateResponse,
   ExecutionReport,
   ExportResponse,
+  UiLog,
 } from './types';
 
 let idCounter = 1;
+let logCounter = 1;
 
 const INITIAL_NODES: Node[] = [
   {
@@ -71,13 +73,23 @@ export const App: React.FC = () => {
   const [validationReport, setValidationReport] = useState<ValidateResponse | null>(null);
   const [executionReport, setExecutionReport] = useState<ExecutionReport | null>(null);
   const [exportData, setExportData] = useState<ExportResponse | null>(null);
-  const [logs, setLogs] = useState<string[]>([]);
+  const [logs, setLogs] = useState<UiLog[]>([]);
   const [consoleOpen, setConsoleOpen] = useState<boolean>(true);
 
   const [isValidating, setIsValidating] = useState<boolean>(false);
   const [isExecuting, setIsExecuting] = useState<boolean>(false);
   const [isExporting, setIsExporting] = useState<boolean>(false);
   const [isCodeLoading, setIsCodeLoading] = useState<boolean>(false);
+
+  const appendLog = useCallback(
+    (key: string, params: Record<string, string | number> = {}, icon = '') => {
+      setLogs((previous) => [
+        ...previous,
+        { id: logCounter++, timestamp: Date.now(), icon, key, params },
+      ]);
+    },
+    []
+  );
 
   // 1. Fetch available nodes and test API connection
   const fetchSpecs = useCallback(async () => {
@@ -261,18 +273,12 @@ export const App: React.FC = () => {
       const data: ValidateResponse = await res.json();
       setValidationReport(data);
       if (data.valid) {
-        setLogs((prev) => [
-          ...prev,
-          `[${new Date().toLocaleTimeString()}] ✅ Validation passed! Order: ${data.execution_order.join(' → ')}`,
-        ]);
+        appendLog('log.validationPassed', { order: data.execution_order.join(' → ') }, '✅');
       } else {
-        setLogs((prev) => [
-          ...prev,
-          `[${new Date().toLocaleTimeString()}] ❌ Validation failed with ${data.errors.length} error(s).`,
-        ]);
+        appendLog('log.validationFailed', { count: data.errors.length }, '❌');
       }
     } catch (err: any) {
-      setLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] Error calling /api/validate: ${err.message}`]);
+      appendLog('log.apiError', { message: err.message }, '❌');
     } finally {
       setIsValidating(false);
     }
@@ -292,7 +298,7 @@ export const App: React.FC = () => {
 
       if (!res.ok) {
         const errJson = await res.json();
-        setLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] ❌ Execution error: ${errJson.error}`]);
+        appendLog('log.executionError', { message: errJson.error }, '❌');
         return;
       }
 
@@ -316,14 +322,13 @@ export const App: React.FC = () => {
         })
       );
 
-      setLogs((prev) => [
-        ...prev,
-        `[${new Date().toLocaleTimeString()}] 🚀 Execution finished! Executed: [${report.executed.join(
-          ', '
-        )}], Skipped: [${report.skipped.join(', ')}]`,
-      ]);
+      appendLog(
+        'log.executionFinished',
+        { executed: report.executed.join(', '), skipped: report.skipped.join(', ') },
+        '🚀'
+      );
     } catch (err: any) {
-      setLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] Error calling /api/execute: ${err.message}`]);
+      appendLog('log.apiError', { message: err.message }, '❌');
     } finally {
       setIsExecuting(false);
     }
@@ -348,17 +353,14 @@ export const App: React.FC = () => {
 
       if (res.ok) {
         const data = await res.json();
-        setLogs((prev) => [
-          ...prev,
-          `[${new Date().toLocaleTimeString()}] 🎉 Project exported to disk: ${data.output_dir}`,
-          `[${new Date().toLocaleTimeString()}] 👉 To run in terminal: cd ${data.output_dir} && cargo run`,
-        ]);
+        appendLog('log.exported', { path: data.output_dir }, '🎉');
+        appendLog('log.runExport', { path: data.output_dir }, '👉');
       } else {
         const errJson = await res.json();
-        setLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] ❌ Export failed: ${errJson.error}`]);
+        appendLog('log.exportFailed', { message: errJson.error }, '❌');
       }
     } catch (err: any) {
-      setLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] Error exporting to disk: ${err.message}`]);
+      appendLog('log.apiError', { message: err.message }, '❌');
     } finally {
       setIsExporting(false);
     }
@@ -371,7 +373,7 @@ export const App: React.FC = () => {
     setExecutionReport(null);
     setValidationReport(null);
     setExportData(null);
-    setLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] 🧹 Canvas cleared.`]);
+    appendLog('log.canvasCleared', {}, '🧹');
   };
 
   // 12. Load Ready-to-Run Examples
@@ -514,7 +516,7 @@ export const App: React.FC = () => {
       ]);
     }
 
-    setLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] 📂 Loaded example: ${example}`]);
+    appendLog('log.exampleLoaded', { example }, '📂');
   };
 
   // Node types registration with injected callbacks and specs

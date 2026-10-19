@@ -52,4 +52,3 @@ impl ViperNode for FsReadNode {
         Ok(output)
     }
 }
-

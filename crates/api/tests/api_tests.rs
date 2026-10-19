@@ -21,7 +21,11 @@ async fn get_json<T: DeserializeOwned>(router: axum::Router, path: &str) -> T {
         .unwrap();
 
     let res = router.oneshot(req).await.unwrap();
-    assert_eq!(res.status(), StatusCode::OK, "GET {path} should return 200 OK");
+    assert_eq!(
+        res.status(),
+        StatusCode::OK,
+        "GET {path} should return 200 OK"
+    );
 
     let body = res.into_body().collect().await.unwrap().to_bytes();
     serde_json::from_slice(&body).unwrap()
@@ -36,7 +40,11 @@ async fn post_json<T: DeserializeOwned>(router: axum::Router, path: &str, payloa
         .unwrap();
 
     let res = router.oneshot(req).await.unwrap();
-    assert_eq!(res.status(), StatusCode::OK, "POST {path} should return 200 OK");
+    assert_eq!(
+        res.status(),
+        StatusCode::OK,
+        "POST {path} should return 200 OK"
+    );
 
     let body = res.into_body().collect().await.unwrap().to_bytes();
     serde_json::from_slice(&body).unwrap()
@@ -123,7 +131,10 @@ async fn execute_endpoint_returns_effective_execution_report() {
     let report: runtime::ExecutionReport = post_json(router, "/api/execute", graph).await;
     assert_eq!(report.executed, vec!["cleaner", "printer"]);
     assert!(report.skipped.is_empty());
-    assert_eq!(report.outputs["cleaner"]["cleaned"], serde_json::json!("hello api"));
+    assert_eq!(
+        report.outputs["cleaner"]["cleaned"],
+        serde_json::json!("hello api")
+    );
 }
 
 #[tokio::test]
@@ -176,13 +187,15 @@ async fn export_disk_endpoint_writes_generated_project_to_temp_dir() {
     assert!(temp_out.join("Cargo.toml").exists());
     assert!(temp_out.join("src/main.rs").exists());
     assert!(temp_out.join("src/nodes.rs").exists());
-    assert!(response.output_dir.starts_with(std::env::temp_dir().to_string_lossy().as_ref()));
+    assert!(response
+        .output_dir
+        .starts_with(std::env::temp_dir().to_string_lossy().as_ref()));
 
     let _ = std::fs::remove_dir_all(&temp_out);
 }
 
 #[tokio::test]
-async fn copilot_hints_endpoint_returns_contextual_hints() {
+async fn tutor_hints_endpoint_returns_structured_contextual_hints() {
     let router = app(AppState::default());
     let graph = json!({
         "graph_version": "0.1",
@@ -193,7 +206,7 @@ async fn copilot_hints_endpoint_returns_contextual_hints() {
     });
 
     let req = Request::builder()
-        .uri("/api/copilot/hints")
+        .uri("/api/tutor/hints")
         .method(Method::POST)
         .header(header::CONTENT_TYPE, "application/json")
         .body(Body::from(serde_json::to_vec(&graph).unwrap()))
@@ -204,7 +217,10 @@ async fn copilot_hints_endpoint_returns_contextual_hints() {
     let body = res.into_body().collect().await.unwrap().to_bytes();
     let hints_resp: api::HintsResponse = serde_json::from_slice(&body).unwrap();
     assert!(!hints_resp.hints.is_empty());
-    assert!(hints_resp.hints.iter().any(|h| h.message.contains("url")));
+    assert!(hints_resp.hints.iter().any(|hint| {
+        hint.code == runtime::HintCode::MissingRequiredInput
+            && hint.params.get("pin").is_some_and(|pin| pin == "url")
+    }));
 }
 
 #[tokio::test]
@@ -243,7 +259,9 @@ async fn runtime_allows_http_get_to_httpbin() {
     let res = executor.execute_with_policy(spec, &policy).await;
     if let Err(e) = res {
         let err_str = e.to_string();
-        assert!(!err_str.contains("SEED Veto"), "Should not be vetoed by SEED: {err_str}");
+        assert!(
+            !err_str.contains("SEED Veto"),
+            "Should not be vetoed by SEED: {err_str}"
+        );
     }
 }
-

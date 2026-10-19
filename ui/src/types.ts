@@ -66,6 +66,14 @@ export interface ExportResponse {
   nodes_rs: string;
 }
 
+export interface UiLog {
+  id: number;
+  timestamp: number;
+  icon: string;
+  key: string;
+  params?: Record<string, string | number>;
+}
+
 export const PIN_COLORS: Record<PinType, { bg: string; border: string; text: string; hex: string }> = {
   string: { bg: 'bg-emerald-500/20', border: 'border-emerald-500', text: 'text-emerald-400', hex: '#10b981' },
   number: { bg: 'bg-blue-500/20', border: 'border-blue-500', text: 'text-blue-400', hex: '#3b82f6' },

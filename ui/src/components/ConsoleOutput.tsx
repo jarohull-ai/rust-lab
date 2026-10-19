@@ -1,9 +1,10 @@
 import React from 'react';
-import { ExecutionReport, ValidateResponse } from '../types';
+import { useI18n } from '../i18n';
+import { ExecutionReport, UiLog, ValidateResponse } from '../types';
 import { Terminal, CheckCircle2, AlertCircle, SkipForward, XCircle, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface ConsoleOutputProps {
-  logs: string[];
+  logs: UiLog[];
   executionReport: ExecutionReport | null;
   validationReport: ValidateResponse | null;
   isOpen: boolean;
@@ -19,6 +20,7 @@ export const ConsoleOutput: React.FC<ConsoleOutputProps> = ({
   onToggle,
   onClear,
 }) => {
+  const { formatTime, t } = useI18n();
   return (
     <div
       className={`border-t border-slate-800 bg-slate-950/95 transition-all duration-200 flex flex-col ${
@@ -32,7 +34,7 @@ export const ConsoleOutput: React.FC<ConsoleOutputProps> = ({
           className="flex items-center gap-2 text-xs font-mono font-semibold text-slate-300 hover:text-slate-100"
         >
           <Terminal className="w-3.5 h-3.5 text-emerald-400" />
-          <span>Execution Console & Diagnostics</span>
+          <span>{t('console.title')}</span>
           {validationReport && (
             <span
               className={`text-[10px] px-1.5 py-0.2 rounded font-mono ${
@@ -41,7 +43,7 @@ export const ConsoleOutput: React.FC<ConsoleOutputProps> = ({
                   : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
               }`}
             >
-              {validationReport.valid ? 'Valid Graph' : 'Invalid Graph'}
+              {validationReport.valid ? t('console.valid') : t('console.invalid')}
             </span>
           )}
           {isOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
@@ -52,7 +54,7 @@ export const ConsoleOutput: React.FC<ConsoleOutputProps> = ({
             onClick={onClear}
             className="text-[11px] text-slate-400 hover:text-slate-200 px-2 py-0.5 rounded hover:bg-slate-800 transition-colors"
           >
-            Clear Console
+            {t('console.clear')}
           </button>
         )}
       </div>
@@ -65,7 +67,7 @@ export const ConsoleOutput: React.FC<ConsoleOutputProps> = ({
             <div className="p-2.5 rounded bg-rose-950/30 border border-rose-800/50 text-rose-300 space-y-1">
               <div className="flex items-center gap-1.5 font-semibold text-rose-400">
                 <XCircle className="w-4 h-4 text-rose-400" />
-                <span>Validation Errors:</span>
+                <span>{t('console.validationErrors')}</span>
               </div>
               {validationReport.errors.map((err, idx) => (
                 <div key={idx} className="pl-5 text-[11px]">
@@ -80,7 +82,7 @@ export const ConsoleOutput: React.FC<ConsoleOutputProps> = ({
             <div className="p-2 rounded bg-emerald-950/20 border border-emerald-800/40 text-emerald-300 flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-emerald-400" />
               <span>
-                Graph is valid! Execution topological order: [{validationReport.execution_order.join(' → ')}]
+                {t('console.validationSuccess', { order: validationReport.execution_order.join(' → ') })}
               </span>
             </div>
           )}
@@ -90,12 +92,12 @@ export const ConsoleOutput: React.FC<ConsoleOutputProps> = ({
             <div className="p-2.5 rounded bg-slate-900 border border-slate-800 space-y-2">
               <div className="flex items-center gap-4 text-slate-200">
                 <span className="flex items-center gap-1.5 text-emerald-400 font-semibold">
-                  <CheckCircle2 className="w-3.5 h-3.5" /> Executed ({executionReport.executed.length}):{' '}
-                  <span className="font-normal text-slate-300">{executionReport.executed.join(', ') || 'none'}</span>
+                  <CheckCircle2 className="w-3.5 h-3.5" /> {t('console.executed', { count: executionReport.executed.length })}{' '}
+                  <span className="font-normal text-slate-300">{executionReport.executed.join(', ') || t('console.none')}</span>
                 </span>
                 {executionReport.skipped.length > 0 && (
                   <span className="flex items-center gap-1.5 text-slate-400 font-semibold">
-                    <SkipForward className="w-3.5 h-3.5" /> Skipped ({executionReport.skipped.length}):{' '}
+                    <SkipForward className="w-3.5 h-3.5" /> {t('console.skipped', { count: executionReport.skipped.length })}{' '}
                     <span className="font-normal text-slate-400">{executionReport.skipped.join(', ')}</span>
                   </span>
                 )}
@@ -103,7 +105,7 @@ export const ConsoleOutput: React.FC<ConsoleOutputProps> = ({
 
               {/* Node outputs dictionary */}
               <div className="space-y-1 mt-1">
-                <span className="text-[11px] text-slate-400 uppercase font-semibold">Node Outputs:</span>
+                <span className="text-[11px] text-slate-400 uppercase font-semibold">{t('console.outputs')}</span>
                 <div className="grid grid-cols-2 gap-2">
                   {Object.entries(executionReport.outputs).map(([nodeId, out]) => (
                     <div key={nodeId} className="p-2 rounded bg-slate-950 border border-slate-800">
@@ -119,14 +121,14 @@ export const ConsoleOutput: React.FC<ConsoleOutputProps> = ({
           )}
 
           {/* General logs */}
-          {logs.map((log, index) => (
-            <div key={index} className="text-slate-300 leading-relaxed">
-              {log}
+          {logs.map((log) => (
+            <div key={log.id} className="text-slate-300 leading-relaxed">
+              [{formatTime(new Date(log.timestamp))}] {log.icon} {t(log.key, log.params)}
             </div>
           ))}
 
           {logs.length === 0 && !executionReport && !validationReport && (
-            <div className="text-slate-600 italic">No execution logs yet. Click "Run Execution" to test your graph.</div>
+            <div className="text-slate-600 italic">{t('console.empty')}</div>
           )}
         </div>
       )}

@@ -48,7 +48,10 @@ fn validator_rejects_duplicate_node_ids() {
         "edges": []
     }));
 
-    let err = Validator::new(&registry()).validate(&g).unwrap_err().to_string();
+    let err = Validator::new(&registry())
+        .validate(&g)
+        .unwrap_err()
+        .to_string();
     assert!(err.contains("Duplicate node ID"), "{err}");
 }
 

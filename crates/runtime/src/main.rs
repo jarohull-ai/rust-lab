@@ -50,7 +50,10 @@ async fn main() -> Result<()> {
             .unwrap_or("rust_lab_app");
         let safe_name = codegen::sanitize_ident(project_name);
         codegen::export_project(&graph, out_dir, &safe_name)?;
-        println!("🎉 Project successfully generated in: {}", out_dir.display());
+        println!(
+            "🎉 Project successfully generated in: {}",
+            out_dir.display()
+        );
         println!("👉 To build and run:");
         println!("   cd {} && cargo run", out_dir.display());
         return Ok(());

@@ -164,13 +164,15 @@ impl Executor {
         for edge in graph.edges.iter().filter(|e| e.to.node == id) {
             // A source that was skipped (or produced no such port) simply contributes nothing;
             // the required-input check reports it if the pin was mandatory.
-            if let Some(val) = results
-                .get(&edge.from.node)
-                .and_then(|o| o.get(&edge.from.port).or_else(|| o.get(&edge.from.port.to_lowercase())))
-            {
+            if let Some(val) = results.get(&edge.from.node).and_then(|o| {
+                o.get(&edge.from.port)
+                    .or_else(|| o.get(&edge.from.port.to_lowercase()))
+            }) {
                 inputs.insert(edge.to.port.clone(), val.clone());
                 inputs.insert(edge.to.port.to_lowercase(), val.clone());
-                if edge.to.port.to_lowercase() == "file_path" || edge.to.port.to_lowercase() == "filepath" {
+                if edge.to.port.to_lowercase() == "file_path"
+                    || edge.to.port.to_lowercase() == "filepath"
+                {
                     inputs.insert("path".to_string(), val.clone());
                 }
             }
@@ -371,6 +373,9 @@ mod tests {
         }));
         // Since custom-partner-api.org won't resolve in sandbox, we just verify SEED didn't veto it!
         let err = executor().execute(g).await.unwrap_err().to_string();
-        assert!(!err.contains("SEED Veto"), "SEED should not have vetoed allowed domain: {err}");
+        assert!(
+            !err.contains("SEED Veto"),
+            "SEED should not have vetoed allowed domain: {err}"
+        );
     }
 }

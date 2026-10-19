@@ -5,11 +5,10 @@ import {
   FolderDown,
   Trash2,
   BookOpen,
-  Sparkles,
   Cpu,
-  Layers,
 } from 'lucide-react';
-import { CopilotButton } from './CopilotButton';
+import { SeedTutorButton } from './SeedTutorButton';
+import { useI18n } from '../i18n';
 import { GraphSpec } from '../types';
 
 interface ToolbarProps {
@@ -39,6 +38,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   isExecuting,
   isExporting,
 }) => {
+  const { locale, setLocale, t } = useI18n();
   const [showExamples, setShowExamples] = useState(false);
 
   return (
@@ -57,7 +57,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
               </span>
             </div>
             <span className="text-[10px] text-slate-400 block -mt-0.5 font-mono">
-              The Arduino of Rust — Visual to Code
+              {t('toolbar.tagline')}
             </span>
           </div>
         </div>
@@ -71,7 +71,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           />
           <span className="text-slate-400">API:</span>
           <span className={apiConnected ? 'text-emerald-400 font-semibold' : 'text-rose-400'}>
-            {apiConnected ? 'Connected (Axum)' : 'Disconnected'}
+            {apiConnected ? t('toolbar.connected') : t('toolbar.disconnected')}
           </span>
         </div>
       </div>
@@ -85,7 +85,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors"
           >
             <BookOpen className="w-3.5 h-3.5 text-yellow-400" />
-            <span>Load Example</span>
+            <span>{t('toolbar.loadExample')}</span>
           </button>
 
           {showExamples && (
@@ -97,8 +97,8 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                 }}
                 className="w-full text-left px-2.5 py-1.5 rounded text-xs hover:bg-slate-800 text-slate-200 flex flex-col"
               >
-                <span className="font-semibold text-purple-400">Condition Branching</span>
-                <span className="text-[10px] text-slate-400">True/False paths + delay control</span>
+                <span className="font-semibold text-purple-400">{t('toolbar.example.condition.title')}</span>
+                <span className="text-[10px] text-slate-400">{t('toolbar.example.condition.description')}</span>
               </button>
               <button
                 onClick={() => {
@@ -107,8 +107,8 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                 }}
                 className="w-full text-left px-2.5 py-1.5 rounded text-xs hover:bg-slate-800 text-slate-200 flex flex-col mt-0.5"
               >
-                <span className="font-semibold text-blue-400">Text Cleaning Pipeline</span>
-                <span className="text-[10px] text-slate-400">Trim, uppercase, log output</span>
+                <span className="font-semibold text-blue-400">{t('toolbar.example.text.title')}</span>
+                <span className="text-[10px] text-slate-400">{t('toolbar.example.text.description')}</span>
               </button>
               <button
                 onClick={() => {
@@ -117,15 +117,14 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                 }}
                 className="w-full text-left px-2.5 py-1.5 rounded text-xs hover:bg-slate-800 text-slate-200 flex flex-col mt-0.5"
               >
-                <span className="font-semibold text-cyan-400">HTTP & JSON Converter</span>
-                <span className="text-[10px] text-slate-400">Fetch json & convert to string</span>
+                <span className="font-semibold text-cyan-400">{t('toolbar.example.http.title')}</span>
+                <span className="text-[10px] text-slate-400">{t('toolbar.example.http.description')}</span>
               </button>
             </div>
           )}
         </div>
 
-        {/* Copilot AI (SEED Engine) */}
-        <CopilotButton graph={graph} onFocusNode={onFocusNode} />
+        <SeedTutorButton graph={graph} onFocusNode={onFocusNode} />
 
         {/* Validate Graph */}
         <button
@@ -134,7 +133,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors disabled:opacity-50"
         >
           <CheckCircle className={`w-3.5 h-3.5 text-cyan-400 ${isValidating ? 'animate-spin' : ''}`} />
-          <span>Validate</span>
+          <span>{t('toolbar.validate')}</span>
         </button>
 
         {/* Run Execution */}
@@ -144,7 +143,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/20 transition-all disabled:opacity-50"
         >
           <Play className={`w-3.5 h-3.5 fill-current ${isExecuting ? 'animate-pulse' : ''}`} />
-          <span>{isExecuting ? 'Running...' : 'Run Graph'}</span>
+          <span>{isExecuting ? t('toolbar.running') : t('toolbar.run')}</span>
         </button>
 
         {/* Export Cargo */}
@@ -152,10 +151,10 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           onClick={onExportDisk}
           disabled={isExporting}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-orange-600 hover:bg-orange-500 text-white shadow-lg shadow-orange-600/20 transition-all disabled:opacity-50"
-          title="Export to target/exported-app and compile standalone"
+          title={t('toolbar.exportTitle')}
         >
           <FolderDown className="w-3.5 h-3.5" />
-          <span>Export Cargo</span>
+          <span>{t('toolbar.export')}</span>
         </button>
 
         <div className="h-5 w-px bg-slate-800 mx-1" />
@@ -164,10 +163,26 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         <button
           onClick={onClear}
           className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20 transition-colors"
-          title="Clear Canvas"
+          title={t('toolbar.clearTitle')}
         >
           <Trash2 className="w-4 h-4" />
         </button>
+
+        <div className="flex items-center rounded-lg border border-slate-700 bg-slate-800 p-0.5 text-[10px] font-bold">
+          {(['en', 'pl'] as const).map((language) => (
+            <button
+              key={language}
+              type="button"
+              onClick={() => setLocale(language)}
+              title={t(language === 'en' ? 'language.english' : 'language.polish')}
+              className={`rounded px-1.5 py-1 transition-colors ${
+                locale === language ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-slate-100'
+              }`}
+            >
+              {language.toUpperCase()}
+            </button>
+          ))}
+        </div>
       </div>
     </header>
   );

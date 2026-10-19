@@ -6,9 +6,7 @@ use axum::{
     Router,
 };
 use lab_node_sdk::{GraphSpec, NodeSpec};
-use runtime::{
-    codegen, plan, ExecutionReport, Executor, NodeRegistry, Validator,
-};
+use runtime::{codegen, plan, ExecutionReport, Executor, NodeRegistry, Validator};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::Path;
@@ -84,7 +82,7 @@ pub struct ErrorResponse {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HintsResponse {
-    pub hints: Vec<runtime::copilot::Hint>,
+    pub hints: Vec<runtime::tutor::Hint>,
 }
 
 pub fn app(state: AppState) -> Router {
@@ -95,15 +93,13 @@ pub fn app(state: AppState) -> Router {
         .route("/api/execute", post(execute_handler))
         .route("/api/export", post(export_handler))
         .route("/api/export/disk", post(export_disk_handler))
-        .route("/api/copilot/hints", post(copilot_hints_handler));
+        .route("/api/tutor/hints", post(tutor_hints_handler));
 
     if Path::new("ui/dist").exists() {
         router = router.fallback_service(ServeDir::new("ui/dist"));
     }
 
-    router
-        .layer(CorsLayer::permissive())
-        .with_state(state)
+    router.layer(CorsLayer::permissive()).with_state(state)
 }
 
 async fn health_handler() -> Json<HealthResponse> {
@@ -185,7 +181,12 @@ async fn export_handler(
     }
 
     let safe_name = codegen::sanitize_ident(&payload.project_name);
-    let used_kinds: HashSet<&str> = payload.graph.nodes.iter().map(|n| n.kind.as_str()).collect();
+    let used_kinds: HashSet<&str> = payload
+        .graph
+        .nodes
+        .iter()
+        .map(|n| n.kind.as_str())
+        .collect();
     let has_network = used_kinds.contains("http_get");
 
     let cargo_toml = codegen::generate_cargo_toml(&safe_name, has_network);
@@ -253,11 +254,10 @@ async fn export_disk_handler(
     }
 }
 
-async fn copilot_hints_handler(
+async fn tutor_hints_handler(
     State(state): State<AppState>,
     Json(graph): Json<GraphSpec>,
 ) -> Json<HintsResponse> {
-    let hints = runtime::copilot::generate_hints(&graph, &state.registry);
+    let hints = runtime::tutor::generate_hints(&graph, &state.registry);
     Json(HintsResponse { hints })
 }
-
