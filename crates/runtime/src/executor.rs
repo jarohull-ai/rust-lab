@@ -3,6 +3,7 @@ use crate::plan;
 use crate::registry::NodeRegistry;
 use anyhow::{anyhow, Context, Result};
 use lab_node_sdk::{GraphSpec, NodeInput, NodeOutput};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -12,7 +13,7 @@ pub struct Executor {
 }
 
 /// What happened to each node during a run — handy for tests and future UI.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct ExecutionReport {
     pub executed: Vec<String>,
     pub skipped: Vec<String>,

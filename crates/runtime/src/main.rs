@@ -1,17 +1,8 @@
-mod codegen;
-mod executor;
-mod nodes;
-mod plan;
-mod registry;
-mod validator;
-
 use anyhow::{Context, Result};
-use executor::Executor;
-use registry::NodeRegistry;
+use runtime::{codegen, nodes, Executor, NodeRegistry, Validator};
 use std::env;
 use std::fs;
 use std::path::Path;
-use validator::Validator;
 
 #[tokio::main]
 async fn main() -> Result<()> {

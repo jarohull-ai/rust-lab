@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/lab-node-sdk",
     "crates/runtime",
+    "crates/api",
 ]
 
 [workspace.package]
