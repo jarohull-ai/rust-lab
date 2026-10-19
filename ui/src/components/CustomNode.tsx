@@ -209,6 +209,35 @@ export const CustomNode = memo(({ id, data }: CustomNodeProps) => {
             </div>
           )}
 
+          {kind === 'json_parse' && (
+            <div className="space-y-1.5">
+              <div>
+                <label className="text-[10px] uppercase text-slate-400 font-semibold">
+                  {t('node.jsonText')}
+                </label>
+                <input
+                  type="text"
+                  value={config.json_str || ''}
+                  onChange={(e) => onConfigChange(id, 'json_str', e.target.value)}
+                  placeholder='{"enabled": true}'
+                  className="w-full text-xs font-mono px-2 py-1 rounded bg-slate-950 border border-slate-800 focus:border-amber-500 outline-none text-slate-100"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] uppercase text-slate-400 font-semibold">
+                  {t('node.jsonPath')}
+                </label>
+                <input
+                  type="text"
+                  value={config.path || ''}
+                  onChange={(e) => onConfigChange(id, 'path', e.target.value)}
+                  placeholder="data.items.0.name"
+                  className="w-full text-xs font-mono px-2 py-1 rounded bg-slate-950 border border-slate-800 focus:border-amber-500 outline-none text-slate-100"
+                />
+              </div>
+            </div>
+          )}
+
           {kind === 'delay' && (
             <div>
               <label className="text-[10px] uppercase text-slate-400 font-semibold">{t('node.duration')}</label>
@@ -224,6 +253,18 @@ export const CustomNode = memo(({ id, data }: CustomNodeProps) => {
 
           {kind === 'text_clean' && (
             <div className="space-y-1 text-[11px] text-slate-300">
+              <div className="pb-1">
+                <label className="text-[10px] uppercase text-slate-400 font-semibold">
+                  {t('node.staticText')}
+                </label>
+                <input
+                  type="text"
+                  value={config.text || ''}
+                  onChange={(e) => onConfigChange(id, 'text', e.target.value)}
+                  placeholder={t('node.messagePlaceholder')}
+                  className="w-full text-xs px-2 py-1 rounded bg-slate-950 border border-slate-800 focus:border-blue-500 outline-none text-slate-100"
+                />
+              </div>
               <div className="flex items-center justify-between">
                 <span>{t('node.trim')}:</span>
                 <input

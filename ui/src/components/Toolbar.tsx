@@ -6,6 +6,7 @@ import {
   Trash2,
   BookOpen,
   Cpu,
+  GraduationCap,
 } from 'lucide-react';
 import { SeedTutorButton } from './SeedTutorButton';
 import { useI18n } from '../i18n';
@@ -17,12 +18,14 @@ interface ToolbarProps {
   onExecute: () => void;
   onExportDisk: () => void;
   onClear: () => void;
+  onToggleLessons: () => void;
   onLoadExample: (exampleName: 'condition' | 'text' | 'http') => void;
   onFocusNode?: (nodeId: string) => void;
   apiConnected: boolean;
   isValidating: boolean;
   isExecuting: boolean;
   isExporting: boolean;
+  lessonsOpen: boolean;
 }
 
 export const Toolbar: React.FC<ToolbarProps> = ({
@@ -31,12 +34,14 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   onExecute,
   onExportDisk,
   onClear,
+  onToggleLessons,
   onLoadExample,
   onFocusNode,
   apiConnected,
   isValidating,
   isExecuting,
   isExporting,
+  lessonsOpen,
 }) => {
   const { locale, setLocale, t } = useI18n();
   const [showExamples, setShowExamples] = useState(false);
@@ -78,6 +83,19 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 
       {/* Action Buttons */}
       <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={onToggleLessons}
+          className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${
+            lessonsOpen
+              ? 'border-orange-500/50 bg-orange-500/20 text-orange-300'
+              : 'border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700'
+          }`}
+        >
+          <GraduationCap className="h-3.5 w-3.5" />
+          <span>{t('toolbar.lessons')}</span>
+        </button>
+
         {/* Load Example Dropdown */}
         <div className="relative">
           <button

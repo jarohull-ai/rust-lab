@@ -17,6 +17,8 @@ import { Sidebar } from './components/Sidebar';
 import { CodeView } from './components/CodeView';
 import { ConsoleOutput } from './components/ConsoleOutput';
 import { Toolbar } from './components/Toolbar';
+import { GuidedLessons } from './components/GuidedLessons';
+import { createLessonSetup, LessonId } from './lessons';
 import {
   GraphSpec,
   NodeSpec,
@@ -72,9 +74,12 @@ export const App: React.FC = () => {
   const [apiConnected, setApiConnected] = useState<boolean>(false);
   const [validationReport, setValidationReport] = useState<ValidateResponse | null>(null);
   const [executionReport, setExecutionReport] = useState<ExecutionReport | null>(null);
+  const [executionRevision, setExecutionRevision] = useState<string | null>(null);
   const [exportData, setExportData] = useState<ExportResponse | null>(null);
   const [logs, setLogs] = useState<UiLog[]>([]);
   const [consoleOpen, setConsoleOpen] = useState<boolean>(true);
+  const [lessonsOpen, setLessonsOpen] = useState<boolean>(false);
+  const [activeLesson, setActiveLesson] = useState<LessonId | null>(null);
 
   const [isValidating, setIsValidating] = useState<boolean>(false);
   const [isExecuting, setIsExecuting] = useState<boolean>(false);
@@ -131,6 +136,14 @@ export const App: React.FC = () => {
         })),
     };
   }, [nodes, edges]);
+
+  const graphRevision = useMemo(() => JSON.stringify(buildGraphSpec()), [buildGraphSpec]);
+
+  useEffect(() => {
+    setExecutionReport(null);
+    setExecutionRevision(null);
+    setValidationReport(null);
+  }, [graphRevision]);
 
   // 3. Debounced Live Code Compilation from API
   const refreshCode = useCallback(async () => {
@@ -288,8 +301,11 @@ export const App: React.FC = () => {
   const handleExecute = async () => {
     setIsExecuting(true);
     setConsoleOpen(true);
+    setExecutionReport(null);
+    setExecutionRevision(null);
     try {
       const graph = buildGraphSpec();
+      const revision = JSON.stringify(graph);
       const res = await fetch('/api/execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -304,6 +320,7 @@ export const App: React.FC = () => {
 
       const report: ExecutionReport = await res.json();
       setExecutionReport(report);
+      setExecutionRevision(revision);
 
       // Update node visual status (executed vs skipped)
       setNodes((nds) =>
@@ -371,13 +388,31 @@ export const App: React.FC = () => {
     setNodes([]);
     setEdges([]);
     setExecutionReport(null);
+    setExecutionRevision(null);
     setValidationReport(null);
     setExportData(null);
     appendLog('log.canvasCleared', {}, '🧹');
   };
 
+  const handleStartLesson = useCallback((lesson: LessonId) => {
+    const setup = createLessonSetup(lesson);
+    setNodes(setup.nodes);
+    setEdges(setup.edges);
+    setExecutionReport(null);
+    setExecutionRevision(null);
+    setValidationReport(null);
+    setExportData(null);
+    setActiveLesson(lesson);
+    setLessonsOpen(true);
+  }, [setEdges, setNodes]);
+
+  const handleResetLesson = useCallback(() => {
+    if (activeLesson) handleStartLesson(activeLesson);
+  }, [activeLesson, handleStartLesson]);
+
   // 12. Load Ready-to-Run Examples
   const handleLoadExample = (example: 'condition' | 'text' | 'http') => {
+    setActiveLesson(null);
     if (example === 'text') {
       setNodes([
         {
@@ -537,21 +572,27 @@ export const App: React.FC = () => {
     }));
   }, [nodes, nodeSpecs, handleConfigChange, handleDeleteNode]);
 
+  const currentGraph = buildGraphSpec();
+  const currentExecutionReport =
+    executionRevision === graphRevision ? executionReport : null;
+
   return (
     <div className="flex flex-col h-screen w-screen bg-slate-950 font-sans text-slate-100 select-none">
       {/* Top Navigation & Actions */}
       <Toolbar
-        graph={buildGraphSpec()}
+        graph={currentGraph}
         onValidate={handleValidate}
         onExecute={handleExecute}
         onExportDisk={handleExportDisk}
         onClear={handleClear}
+        onToggleLessons={() => setLessonsOpen((open) => !open)}
         onLoadExample={handleLoadExample}
         onFocusNode={handleFocusNode}
         apiConnected={apiConnected}
         isValidating={isValidating}
         isExecuting={isExecuting}
         isExporting={isExporting}
+        lessonsOpen={lessonsOpen}
       />
 
       {/* Main Workspace */}
@@ -561,6 +602,17 @@ export const App: React.FC = () => {
 
         {/* Center: Interactive Visual Canvas */}
         <div className="flex-1 flex flex-col h-full relative" onDrop={onDrop} onDragOver={onDragOver}>
+          {lessonsOpen && (
+            <GuidedLessons
+              activeLesson={activeLesson}
+              graph={currentGraph}
+              executionReport={currentExecutionReport}
+              onStart={handleStartLesson}
+              onReset={handleResetLesson}
+              onExit={() => setActiveLesson(null)}
+              onClose={() => setLessonsOpen(false)}
+            />
+          )}
           <div className="flex-1 w-full h-full">
             <ReactFlow
               nodes={enhancedNodes}

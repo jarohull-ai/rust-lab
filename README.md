@@ -12,6 +12,7 @@ Rust Lab is a standalone learning environment for building typed data-flow graph
 - Construction Mode exports a standalone Cargo project.
 - React Flow canvas with a generated Rust code view and execution diagnostics.
 - SEED Tutor provides adaptive, deterministic learning hints without an LLM.
+- Three guided lessons with live completion checks and browser-local progress.
 
 ## Workspace
 
@@ -62,6 +63,16 @@ Hints adapt to repeated attempts:
 3. Third occurrence: a concrete solution.
 
 Resolving the issue marks its concept as learned. Progress stays in the browser's local storage and can be reset from the tutor panel. Refreshing the same graph does not count as another attempt.
+
+## Guided lessons
+
+Open **Lessons** in the toolbar to start one of three exercises:
+
+1. **Text Pipeline** — connect compatible String ports and run a two-node graph.
+2. **HTTP and JSON** — build an HTTP → JSON → String → Log pipeline.
+3. **Conditions** — perform an explicit Json-to-Boolean conversion and configure control-flow branches.
+
+Each lesson starts with an intentionally incomplete graph. Its checklist updates as the learner edits the graph, and the final criterion is awarded only after the current graph executes successfully. Completed lessons are stored locally in the browser.
 
 ## Run the application
 
