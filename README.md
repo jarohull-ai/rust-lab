@@ -1,20 +1,19 @@
-# Rust Lab
+# Polyglot Lab
 
-**Learn · Build · Experiment with Rust**
+**Visual-to-Code Educational Platform · Learn, Build & Experiment with Rust, Go, Python, and C++**
 
-[![CI](https://github.com/jarohull-ai/rust-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/jarohull-ai/rust-lab/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/jarohull-ai/rust-lab?include_prereleases&color=orange)](https://github.com/jarohull-ai/rust-lab/releases)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
-[![Rust](https://img.shields.io/badge/Rust-stable-orange.svg)](https://www.rust-lang.org/)
+[![Support on Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-Donate-yellow.svg?logo=buy-me-a-coffee)](https://buymeacoffee.com/HISTORYINANUTSHELL)
+[![Sponsor](https://img.shields.io/badge/GitHub-Sponsor-pink?logo=github)](https://github.com/sponsors/jarohull-ai)
 
-Rust Lab is a local-first Rust learning and prototyping environment. Beginners can connect typed
-nodes and inspect the Rust they generate; experienced users can create or import real Cargo
-projects, edit source code, add public crates, and run Cargo commands in an isolated sandbox.
+Polyglot Lab is an interactive visual programming and prototyping environment. Beginners can connect typed
+nodes and immediately inspect idiomatic code generated in **Rust**, **Go**, **Python**, or **C++**; intermediate
+and advanced learners can open **Workspace Lab** to create native projects, import public GitHub repositories,
+explore package ecosystems (`crates.io`, `pkg.go.dev`, `PyPI`, and CMake/C++ libraries), and run builds in a local sandbox.
 
-The canonical product and documentation language is English. Polish is available from the
-`EN / PL` switch in the application.
-
-> **Public alpha candidate — v0.3.0.** Rust Lab is useful today, but its file format and Lab APIs
-> may still change before 1.0. It is not published on crates.io.
+> **Desktop Installers (Windows, macOS, Linux):**
+> Ready-to-use standalone desktop installers (`.exe`, `.msi`, `.dmg`, `.AppImage`, `.deb`) are available under [**Releases**](https://github.com/jarohull-ai/rust-lab/releases). No terminal setup or cloud subscription required.
 
 ## Why Rust Lab?
 
@@ -189,6 +188,13 @@ See the [roadmap](docs/ROADMAP.md) for the deliberately limited post-alpha scope
 - Use the feature request template for product proposals.
 - Report vulnerabilities privately according to [SECURITY.md](SECURITY.md).
 - Read [SUPPORT.md](SUPPORT.md) for the support boundary.
+
+## Support & Donations 💖
+
+If you enjoy Polyglot Lab or find it helpful for teaching, programming, and learning, you can support further development:
+
+- ☕ **Buy Me a Coffee:** [buymeacoffee.com/HISTORYINANUTSHELL](https://buymeacoffee.com/HISTORYINANUTSHELL)
+- 💖 **GitHub Sponsors:** [github.com/sponsors/jarohull-ai](https://github.com/sponsors/jarohull-ai)
 
 ## License
 
