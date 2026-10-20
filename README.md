@@ -40,8 +40,7 @@ No account, cloud service, API key, or LLM is required for the learning experien
 | Cargo dependency Fetch | A running Docker service and the local `rust:bookworm` image (`docker pull rust:bookworm`) |
 | Public GitHub import and crates.io search | Internet connection |
 
-Linux is the supported host platform for the v0.3.0 alpha. Other platforms can use the graph and
-learning features, but the Cargo sandbox has not yet passed its release gate there.
+Linux, Windows, and macOS are supported host platforms for Polyglot Lab v0.4.1. Standalone desktop installers (.exe, .msi, .dmg, .AppImage, .deb) package the native UI and backend without requiring manual toolchain setup.
 
 From a fresh checkout:
 
@@ -112,8 +111,7 @@ capabilities. It fully supports Graph mode, lessons, code generation, and browse
 The Compose container intentionally receives neither the host Docker socket nor additional
 namespace privileges. Therefore real Cargo execution in Lab mode is reported as unavailable in the
 standard Compose deployment. Mounting the Docker socket would grant excessive host control and is
-not a supported workaround. Run Rust Lab directly on a Linux host for the complete v0.3.0 Lab
-experience.
+not a supported workaround. Run Polyglot Lab directly on your host or use the standalone desktop installers for the complete experience.
 
 ## Developer workflow
 

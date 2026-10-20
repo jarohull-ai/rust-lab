@@ -40,6 +40,7 @@ import {
   LanguageTarget,
   UiLog,
 } from './types';
+import { apiFetch } from './api';
 
 const WorkspaceLab = React.lazy(async () => {
   const module = await import('./components/WorkspaceLab');
@@ -267,7 +268,7 @@ export const App: React.FC = () => {
   // 1. Fetch available nodes and test API connection
   const fetchSpecs = useCallback(async () => {
     try {
-      const res = await fetch('/api/nodes');
+      const res = await apiFetch('/api/nodes');
       if (res.ok) {
         const data: NodeSpec[] = await res.json();
         setNodeSpecs(data);
@@ -303,7 +304,7 @@ export const App: React.FC = () => {
     setIsCodeLoading(true);
     try {
       const graph = buildGraphSpec();
-      const res = await fetch('/api/export', {
+      const res = await apiFetch('/api/export', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -334,7 +335,7 @@ export const App: React.FC = () => {
     setIsCompiling(true);
     setCompileReport(null);
     try {
-      const response = await fetch('/api/compile', {
+      const response = await apiFetch('/api/compile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ graph: buildGraphSpec(), project_name: projectName }),
@@ -461,7 +462,7 @@ export const App: React.FC = () => {
     setConsoleOpen(true);
     try {
       const graph = buildGraphSpec();
-      const res = await fetch('/api/validate', {
+      const res = await apiFetch('/api/validate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(graph),
@@ -489,7 +490,7 @@ export const App: React.FC = () => {
     try {
       const graph = buildGraphSpec();
       const revision = JSON.stringify(graph);
-      const res = await fetch('/api/execute', {
+      const res = await apiFetch('/api/execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(graph),
@@ -576,7 +577,7 @@ export const App: React.FC = () => {
     setConsoleOpen(true);
     try {
       const graph = buildGraphSpec();
-      const res = await fetch('/api/export', {
+      const res = await apiFetch('/api/export', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

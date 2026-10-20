@@ -26,6 +26,7 @@ import {
   WandSparkles,
 } from 'lucide-react';
 import { useI18n } from '../i18n';
+import { apiFetch } from '../api';
 import {
   CargoCommandResponse,
   CrateSummary,
@@ -40,7 +41,7 @@ import {
 type CargoAction = CargoCommandResponse['action'];
 
 async function apiJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, init);
+  const response = await apiFetch(url, init);
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error((body as { error?: string }).error ?? `HTTP ${response.status}`);
   return body as T;

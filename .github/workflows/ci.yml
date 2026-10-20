@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, polyglot-lab]
   pull_request:
-    branches: [main]
+    branches: [main, polyglot-lab]
   workflow_dispatch:
 
 permissions:

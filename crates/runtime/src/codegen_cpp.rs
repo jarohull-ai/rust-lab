@@ -135,6 +135,48 @@ inline void log_output(const T& text) {
         );
     }
 
+    if used_kinds.contains("http_get") {
+        code.push_str(
+            r#"inline std::string http_get(const std::string& url) {
+    std::cout << "   HTTP GET: " << url << "\n";
+    return std::string("{\"status\":\"ok\",\"simulated_url\":\"") + url + "\"}";
+}
+
+"#,
+        );
+    }
+
+    if used_kinds.contains("json_parse") {
+        code.push_str(
+            r#"inline std::string json_parse(const std::string& json_str, const std::string& path = "") {
+    std::cout << "   Parsing JSON: " << json_str << " (path: " << path << ")\n";
+    return json_str;
+}
+
+"#,
+        );
+    }
+
+    if used_kinds.contains("json_to_string") {
+        code.push_str(
+            r#"inline std::string json_to_string(const std::string& raw) {
+    return raw;
+}
+
+"#,
+        );
+    }
+
+    if used_kinds.contains("json_to_bool") {
+        code.push_str(
+            r#"inline bool json_to_bool(const std::string& raw) {
+    return raw == "true" || raw == "1";
+}
+
+"#,
+        );
+    }
+
     code.push_str("} // namespace nodes\n");
     code
 }
@@ -162,67 +204,240 @@ pub fn generate_cpp_node_call(
     match node.kind.as_str() {
         "fs_read" => {
             let path_expr = if let Some(&(src, sport)) = in_edges.get("path") {
-                format!("{}_{}", crate::codegen::sanitize_ident(src), crate::codegen::sanitize_ident(sport))
+                format!(
+                    "{}_{}",
+                    crate::codegen::sanitize_ident(src),
+                    crate::codegen::sanitize_ident(sport)
+                )
             } else {
-                let p = node.config.get("path").and_then(|v| v.as_str()).unwrap_or("");
+                let p = node
+                    .config
+                    .get("path")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
                 cpp_string_literal(p)
             };
-            out.push_str(&format!("{indent}auto {id_ident}_content = nodes::fs_read({path_expr});\n"));
+            out.push_str(&format!(
+                "{indent}auto {id_ident}_content = nodes::fs_read({path_expr});\n"
+            ));
         }
         "fs_write" => {
             let path_expr = if let Some(&(src, sport)) = in_edges.get("path") {
-                format!("{}_{}", crate::codegen::sanitize_ident(src), crate::codegen::sanitize_ident(sport))
+                format!(
+                    "{}_{}",
+                    crate::codegen::sanitize_ident(src),
+                    crate::codegen::sanitize_ident(sport)
+                )
             } else {
-                let p = node.config.get("path").and_then(|v| v.as_str()).unwrap_or("");
+                let p = node
+                    .config
+                    .get("path")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
                 cpp_string_literal(p)
             };
             let content_expr = if let Some(&(src, sport)) = in_edges.get("content") {
-                format!("{}_{}", crate::codegen::sanitize_ident(src), crate::codegen::sanitize_ident(sport))
+                format!(
+                    "{}_{}",
+                    crate::codegen::sanitize_ident(src),
+                    crate::codegen::sanitize_ident(sport)
+                )
             } else {
-                let c = node.config.get("content").and_then(|v| v.as_str()).unwrap_or("");
+                let c = node
+                    .config
+                    .get("content")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
                 cpp_string_literal(c)
             };
             out.push_str(&format!("{indent}auto {id_ident}_bytes_written = nodes::fs_write({path_expr}, {content_expr});\n"));
         }
         "log_output" => {
             let text_expr = if let Some(&(src, sport)) = in_edges.get("text") {
-                format!("{}_{}", crate::codegen::sanitize_ident(src), crate::codegen::sanitize_ident(sport))
+                format!(
+                    "{}_{}",
+                    crate::codegen::sanitize_ident(src),
+                    crate::codegen::sanitize_ident(sport)
+                )
             } else {
-                let t = node.config.get("text").and_then(|v| v.as_str()).unwrap_or("");
+                let t = node
+                    .config
+                    .get("text")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
                 cpp_string_literal(t)
             };
             out.push_str(&format!("{indent}nodes::log_output({text_expr});\n"));
         }
         "text_clean" => {
             let text_expr = if let Some(&(src, sport)) = in_edges.get("text") {
-                format!("{}_{}", crate::codegen::sanitize_ident(src), crate::codegen::sanitize_ident(sport))
+                format!(
+                    "{}_{}",
+                    crate::codegen::sanitize_ident(src),
+                    crate::codegen::sanitize_ident(sport)
+                )
             } else {
-                let t = node.config.get("text").and_then(|v| v.as_str()).unwrap_or("");
+                let t = node
+                    .config
+                    .get("text")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
                 cpp_string_literal(t)
             };
-            let trim = if node.config.get("trim").and_then(|v| v.as_bool()).unwrap_or(true) { "true" } else { "false" };
-            let collapse = if node.config.get("collapse").and_then(|v| v.as_bool()).unwrap_or(false) { "true" } else { "false" };
-            let to_lower = if node.config.get("to_lower").and_then(|v| v.as_bool()).unwrap_or(false) { "true" } else { "false" };
-            let to_upper = if node.config.get("to_upper").and_then(|v| v.as_bool()).unwrap_or(false) { "true" } else { "false" };
+            let trim = if node
+                .config
+                .get("trim")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(true)
+            {
+                "true"
+            } else {
+                "false"
+            };
+            let collapse = if node
+                .config
+                .get("collapse")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false)
+            {
+                "true"
+            } else {
+                "false"
+            };
+            let to_lower = if node
+                .config
+                .get("to_lower")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false)
+            {
+                "true"
+            } else {
+                "false"
+            };
+            let to_upper = if node
+                .config
+                .get("to_upper")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false)
+            {
+                "true"
+            } else {
+                "false"
+            };
             out.push_str(&format!("{indent}auto {id_ident}_cleaned = nodes::text_clean({text_expr}, {trim}, {collapse}, {to_lower}, {to_upper});\n"));
         }
         "delay" => {
             let dur_expr = if let Some(&(src, sport)) = in_edges.get("duration") {
-                format!("{}_{}", crate::codegen::sanitize_ident(src), crate::codegen::sanitize_ident(sport))
+                format!(
+                    "{}_{}",
+                    crate::codegen::sanitize_ident(src),
+                    crate::codegen::sanitize_ident(sport)
+                )
             } else {
-                let d = node.config.get("duration").and_then(|v| v.as_str()).unwrap_or("0ms");
+                let d = node
+                    .config
+                    .get("duration")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("0ms");
                 cpp_string_literal(d)
             };
             out.push_str(&format!("{indent}nodes::delay({dur_expr});\n"));
         }
         "string_to_path" => {
             let path_expr = if let Some(&(src, sport)) = in_edges.get("path") {
-                format!("{}_{}", crate::codegen::sanitize_ident(src), crate::codegen::sanitize_ident(sport))
+                format!(
+                    "{}_{}",
+                    crate::codegen::sanitize_ident(src),
+                    crate::codegen::sanitize_ident(sport)
+                )
             } else {
-                let p = node.config.get("path").and_then(|v| v.as_str()).unwrap_or("");
+                let p = node
+                    .config
+                    .get("path")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
                 cpp_string_literal(p)
             };
-            out.push_str(&format!("{indent}auto {id_ident}_path = nodes::string_to_path({path_expr});\n"));
+            out.push_str(&format!(
+                "{indent}auto {id_ident}_path = nodes::string_to_path({path_expr});\n"
+            ));
+        }
+        "http_get" => {
+            let url_expr = if let Some(&(src, sport)) = in_edges.get("url") {
+                format!(
+                    "{}_{}",
+                    crate::codegen::sanitize_ident(src),
+                    crate::codegen::sanitize_ident(sport)
+                )
+            } else {
+                let u = node
+                    .config
+                    .get("url")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+                cpp_string_literal(u)
+            };
+            out.push_str(&format!(
+                "{indent}auto {id_ident}_body = nodes::http_get({url_expr});\n"
+            ));
+        }
+        "json_parse" => {
+            let json_expr = if let Some(&(src, sport)) = in_edges.get("json_str") {
+                format!(
+                    "{}_{}",
+                    crate::codegen::sanitize_ident(src),
+                    crate::codegen::sanitize_ident(sport)
+                )
+            } else {
+                let j = node
+                    .config
+                    .get("json_str")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("{}");
+                cpp_string_literal(j)
+            };
+            let path_expr = if let Some(&(src, sport)) = in_edges.get("path") {
+                format!(
+                    "{}_{}",
+                    crate::codegen::sanitize_ident(src),
+                    crate::codegen::sanitize_ident(sport)
+                )
+            } else if let Some(p) = node.config.get("path").and_then(|v| v.as_str()) {
+                cpp_string_literal(p)
+            } else {
+                "\"\"".to_string()
+            };
+            out.push_str(&format!(
+                "{indent}auto {id_ident}_value = nodes::json_parse({json_expr}, {path_expr});\n"
+            ));
+        }
+        "json_to_string" => {
+            let val_expr = if let Some(&(src, sport)) = in_edges.get("value") {
+                format!(
+                    "{}_{}",
+                    crate::codegen::sanitize_ident(src),
+                    crate::codegen::sanitize_ident(sport)
+                )
+            } else {
+                "\"\"".to_string()
+            };
+            out.push_str(&format!(
+                "{indent}auto {id_ident}_text = nodes::json_to_string({val_expr});\n"
+            ));
+        }
+        "json_to_bool" => {
+            let val_expr = if let Some(&(src, sport)) = in_edges.get("value") {
+                format!(
+                    "{}_{}",
+                    crate::codegen::sanitize_ident(src),
+                    crate::codegen::sanitize_ident(sport)
+                )
+            } else {
+                "\"false\"".to_string()
+            };
+            out.push_str(&format!(
+                "{indent}auto {id_ident}_value = nodes::json_to_bool({val_expr});\n"
+            ));
         }
         _ => {}
     }
@@ -230,16 +445,98 @@ pub fn generate_cpp_node_call(
     out
 }
 
-/// Generates `src/main.cpp` with topological execution.
+/// Generates `src/main.cpp` with topological execution, branching if/else, and error handling.
 pub fn generate_main_cpp(graph: &GraphSpec, topo_order: &[String]) -> Result<String> {
     let node_map: HashMap<&str, &lab_node_sdk::NodeInstance> =
         graph.nodes.iter().map(|n| (n.id.as_str(), n)).collect();
 
+    let conditions: Vec<&lab_node_sdk::NodeInstance> = graph
+        .nodes
+        .iter()
+        .filter(|n| n.kind == "condition")
+        .collect();
+
     let mut body = String::new();
-    for id in topo_order {
-        if let Some(node) = node_map.get(id.as_str()) {
-            body.push_str(&generate_cpp_node_call(node, graph, "    "));
+
+    if conditions.is_empty() {
+        for id in topo_order {
+            if let Some(node) = node_map.get(id.as_str()) {
+                body.push_str(&generate_cpp_node_call(node, graph, "    "));
+            }
         }
+    } else {
+        let cond = conditions[0];
+        let true_target = cond
+            .config
+            .get("true_branch")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        let false_target = cond
+            .config
+            .get("false_branch")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+
+        let reach_true = crate::codegen::reachable_from(true_target, graph);
+        let reach_false = crate::codegen::reachable_from(false_target, graph);
+
+        let true_exclusive: HashSet<_> = reach_true.difference(&reach_false).cloned().collect();
+        let false_exclusive: HashSet<_> = reach_false.difference(&reach_true).cloned().collect();
+
+        // 1. Nodes before condition
+        let cond_idx = topo_order.iter().position(|id| id == &cond.id).unwrap_or(0);
+        for id in &topo_order[..cond_idx] {
+            if let Some(node) = node_map.get(id.as_str()) {
+                body.push_str(&generate_cpp_node_call(node, graph, "    "));
+            }
+        }
+
+        // 2. Condition evaluation
+        let cond_val_expr = if let Some(edge) = graph
+            .edges
+            .iter()
+            .find(|e| e.to.node == cond.id && e.to.port == "value")
+        {
+            format!(
+                "{}_{}",
+                crate::codegen::sanitize_ident(&edge.from.node),
+                crate::codegen::sanitize_ident(&edge.from.port)
+            )
+        } else {
+            let b = cond
+                .config
+                .get("value")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            format!("{b}")
+        };
+
+        body.push_str(&format!(
+            "    // 🌿 Branching Condition: '{}'\n    if ({cond_val_expr}) {{\n",
+            cond.id
+        ));
+
+        // True branch nodes in topological order
+        for id in topo_order {
+            if true_exclusive.contains(id) {
+                if let Some(node) = node_map.get(id.as_str()) {
+                    body.push_str(&generate_cpp_node_call(node, graph, "        "));
+                }
+            }
+        }
+
+        body.push_str("    } else {\n");
+
+        // False branch nodes in topological order
+        for id in topo_order {
+            if false_exclusive.contains(id) {
+                if let Some(node) = node_map.get(id.as_str()) {
+                    body.push_str(&generate_cpp_node_call(node, graph, "        "));
+                }
+            }
+        }
+
+        body.push_str("    }\n\n");
     }
 
     let code = format!(

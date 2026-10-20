@@ -3,8 +3,11 @@ set -euo pipefail
 
 rust_lab_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$rust_lab_root"
+export PATH="$rust_lab_root/ui/node_modules/.bin:$PATH"
 
-npm --prefix ui ci
+if [ ! -d "ui/node_modules" ]; then
+  npm --prefix ui ci
+fi
 npm --prefix ui test
 npm --prefix ui run build
 cargo fmt --all -- --check

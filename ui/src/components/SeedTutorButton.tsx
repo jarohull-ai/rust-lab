@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useI18n } from '../i18n';
 import { GraphSpec } from '../types';
+import { apiFetch } from '../api';
 
 export interface TutorHint {
   id: string;
@@ -76,7 +77,7 @@ export const SeedTutorButton: React.FC<SeedTutorButtonProps> = ({ graph, onFocus
     const requestId = ++requestIdRef.current;
     setIsLoading(true);
     try {
-      const response = await fetch('/api/tutor/hints', {
+      const response = await apiFetch('/api/tutor/hints', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

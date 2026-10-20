@@ -12,6 +12,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
+use tower_http::cors::{Any, CorsLayer};
 use tower_http::services::ServeDir;
 
 mod workspace;
@@ -146,8 +147,14 @@ pub fn app(state: AppState) -> Router {
         router = router.fallback_service(ServeDir::new("ui/dist"));
     }
 
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods(Any)
+        .allow_headers(Any);
+
     router
         .layer(DefaultBodyLimit::max(1_048_576))
+        .layer(cors)
         .with_state(state)
 }
 
@@ -236,17 +243,18 @@ async fn export_handler(
     }
 
     let target = payload.target.unwrap_or(lab_node_sdk::LanguageTarget::Rust);
-    let polyglot_proj = match codegen::generate_polyglot_project(&payload.graph, &payload.project_name, target) {
-        Ok(p) => p,
-        Err(e) => {
-            return Err((
-                StatusCode::BAD_REQUEST,
-                Json(ErrorResponse {
-                    error: format!("Codegen error: {e}"),
-                }),
-            ));
-        }
-    };
+    let polyglot_proj =
+        match codegen::generate_polyglot_project(&payload.graph, &payload.project_name, target) {
+            Ok(p) => p,
+            Err(e) => {
+                return Err((
+                    StatusCode::BAD_REQUEST,
+                    Json(ErrorResponse {
+                        error: format!("Codegen error: {e}"),
+                    }),
+                ));
+            }
+        };
 
     let cargo_toml = polyglot_proj
         .files

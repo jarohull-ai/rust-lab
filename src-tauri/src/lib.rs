@@ -15,8 +15,18 @@ pub fn run() {
                 let state = api::AppState::default();
                 let router = api::app(state);
                 let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 3030));
-                if let Ok(listener) = tokio::net::TcpListener::bind(addr).await {
-                    let _ = axum::serve(listener, router).await;
+                match tokio::net::TcpListener::bind(addr).await {
+                    Ok(listener) => {
+                        log::info!("Polyglot Lab local API bound to http://127.0.0.1:3030");
+                        if let Err(err) = axum::serve(listener, router).await {
+                            log::error!("Polyglot Lab API server encountered error: {err}");
+                        }
+                    }
+                    Err(err) => {
+                        log::warn!(
+                            "Could not bind to 127.0.0.1:3030: {err}. If another instance is running, desktop will share it."
+                        );
+                    }
                 }
             });
 

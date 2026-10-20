@@ -215,10 +215,18 @@ async fn export_endpoint_generates_polyglot_source_files() {
     assert_eq!(export_res.project_name, "go_service");
     assert_eq!(export_res.target, lab_node_sdk::LanguageTarget::Go);
     assert_eq!(export_res.primary_file, "main.go");
-    let main_go = export_res.files.iter().find(|f| f.path == "main.go").unwrap();
+    let main_go = export_res
+        .files
+        .iter()
+        .find(|f| f.path == "main.go")
+        .unwrap();
     assert!(main_go.content.contains("func main()"));
     assert!(main_go.content.contains("textClean"));
-    let go_mod = export_res.files.iter().find(|f| f.path == "go.mod").unwrap();
+    let go_mod = export_res
+        .files
+        .iter()
+        .find(|f| f.path == "go.mod")
+        .unwrap();
     assert!(go_mod.content.contains("module go_service"));
 }
 
@@ -419,6 +427,103 @@ async fn lab_workspace_creates_reads_and_updates_a_cargo_project() {
     )
     .await;
     assert!(saved.content.contains("edited"));
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[tokio::test]
+async fn lab_workspace_runs_python_toolchain_action() {
+    let (router, root) = build_lab_router();
+
+    let py_proj: api::LabProject = post_json(
+        router.clone(),
+        "/api/lab/projects",
+        json!({ "name": "Py Test App", "target": "python" }),
+    )
+    .await;
+
+    // Run check (python3 -m py_compile main.py)
+    let res: api::CargoCommandResponse = post_json(
+        router.clone(),
+        "/api/lab/cargo",
+        json!({
+            "project_id": py_proj.id,
+            "action": "check",
+            "approved": true
+        }),
+    )
+    .await;
+
+    assert!(res.success);
+    assert_eq!(res.sandbox, "host-process");
+
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[tokio::test]
+async fn lab_workspace_creates_reads_and_updates_polyglot_projects() {
+    let (router, root) = build_lab_router();
+
+    // 1. Go Project
+    let go_proj: api::LabProject = post_json(
+        router.clone(),
+        "/api/lab/projects",
+        json!({ "name": "Go Prototype", "target": "go" }),
+    )
+    .await;
+    let go_tree: api::WorkspaceTree = get_json(
+        router.clone(),
+        &format!("/api/lab/projects/{}/tree", go_proj.id),
+    )
+    .await;
+    assert!(go_tree.entries.iter().any(|entry| entry.path == "go.mod"));
+    assert!(go_tree.entries.iter().any(|entry| entry.path == "main.go"));
+    let go_file: api::LabFile = get_json(
+        router.clone(),
+        &format!("/api/lab/file?project_id={}&path=main.go", go_proj.id),
+    )
+    .await;
+    assert!(go_file.content.contains("Hello from Go Lab!"));
+
+    // 2. Python Project
+    let py_proj: api::LabProject = post_json(
+        router.clone(),
+        "/api/lab/projects",
+        json!({ "name": "Py Prototype", "target": "python" }),
+    )
+    .await;
+    let py_file: api::LabFile = get_json(
+        router.clone(),
+        &format!("/api/lab/file?project_id={}&path=main.py", py_proj.id),
+    )
+    .await;
+    assert!(py_file.content.contains("Hello from Python Lab!"));
+
+    // 3. C++ Project
+    let cpp_proj: api::LabProject = post_json(
+        router.clone(),
+        "/api/lab/projects",
+        json!({ "name": "Cpp Prototype", "target": "cpp" }),
+    )
+    .await;
+    let cpp_cmake: api::LabFile = get_json(
+        router.clone(),
+        &format!(
+            "/api/lab/file?project_id={}&path=CMakeLists.txt",
+            cpp_proj.id
+        ),
+    )
+    .await;
+    assert!(cpp_cmake.content.contains("cmake_minimum_required"));
+    let cpp_src: api::LabFile = get_json(
+        router.clone(),
+        &format!(
+            "/api/lab/file?project_id={}&path=src%2Fmain.cpp",
+            cpp_proj.id
+        ),
+    )
+    .await;
+    assert!(cpp_src.content.contains("Hello from C++ Lab!"));
+
     let _ = std::fs::remove_dir_all(root);
 }
 

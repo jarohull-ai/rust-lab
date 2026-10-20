@@ -989,7 +989,8 @@ mod tests {
         assert!(go_mod.content.contains("module my_go_app"));
 
         // 2. Python export
-        let py_proj = generate_polyglot_project(&graph, "my_py_app", LanguageTarget::Python).unwrap();
+        let py_proj =
+            generate_polyglot_project(&graph, "my_py_app", LanguageTarget::Python).unwrap();
         assert_eq!(py_proj.target, LanguageTarget::Python);
         assert_eq!(py_proj.primary_file, "main.py");
         let py_main = py_proj.files.iter().find(|f| f.path == "main.py").unwrap();
@@ -999,15 +1000,63 @@ mod tests {
         assert!(py_main.content.contains("nodes.log_output"));
 
         // 3. C++ export
-        let cpp_proj = generate_polyglot_project(&graph, "my_cpp_app", LanguageTarget::Cpp).unwrap();
+        let cpp_proj =
+            generate_polyglot_project(&graph, "my_cpp_app", LanguageTarget::Cpp).unwrap();
         assert_eq!(cpp_proj.target, LanguageTarget::Cpp);
         assert_eq!(cpp_proj.primary_file, "src/main.cpp");
-        let cpp_main = cpp_proj.files.iter().find(|f| f.path == "src/main.cpp").unwrap();
+        let cpp_main = cpp_proj
+            .files
+            .iter()
+            .find(|f| f.path == "src/main.cpp")
+            .unwrap();
         assert!(cpp_main.content.contains("int main()"));
         assert!(cpp_main.content.contains("nodes::fs_read"));
         assert!(cpp_main.content.contains("nodes::text_clean"));
         assert!(cpp_main.content.contains("nodes::log_output"));
-        let cmake = cpp_proj.files.iter().find(|f| f.path == "CMakeLists.txt").unwrap();
+        let cmake = cpp_proj
+            .files
+            .iter()
+            .find(|f| f.path == "CMakeLists.txt")
+            .unwrap();
         assert!(cmake.content.contains("project(my_cpp_app CXX)"));
+    }
+
+    #[test]
+    fn exports_polyglot_condition_branching() {
+        use lab_node_sdk::LanguageTarget;
+
+        let graph: GraphSpec = serde_json::from_value(json!({
+            "graph_version": "0.1",
+            "nodes": [
+                {"id": "cond", "kind": "condition", "config": {"value": true, "true_branch": "print_true", "false_branch": "print_false"}},
+                {"id": "print_true", "kind": "log_output", "config": {"text": "TRUE_PATH"}},
+                {"id": "print_false", "kind": "log_output", "config": {"text": "FALSE_PATH"}}
+            ],
+            "edges": []
+        })).unwrap();
+
+        // 1. Go branching
+        let go_proj = generate_polyglot_project(&graph, "branch_go", LanguageTarget::Go).unwrap();
+        let go_main = go_proj.files.iter().find(|f| f.path == "main.go").unwrap();
+        assert!(go_main.content.contains("if true {"));
+        assert!(go_main.content.contains("} else {"));
+
+        // 2. Python branching
+        let py_proj =
+            generate_polyglot_project(&graph, "branch_py", LanguageTarget::Python).unwrap();
+        let py_main = py_proj.files.iter().find(|f| f.path == "main.py").unwrap();
+        assert!(py_main.content.contains("if True:"));
+        assert!(py_main.content.contains("else:"));
+
+        // 3. C++ branching
+        let cpp_proj =
+            generate_polyglot_project(&graph, "branch_cpp", LanguageTarget::Cpp).unwrap();
+        let cpp_main = cpp_proj
+            .files
+            .iter()
+            .find(|f| f.path == "src/main.cpp")
+            .unwrap();
+        assert!(cpp_main.content.contains("if (true) {"));
+        assert!(cpp_main.content.contains("} else {"));
     }
 }

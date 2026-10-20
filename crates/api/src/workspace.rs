@@ -761,10 +761,41 @@ fn safe_relative_path(raw: &str) -> Option<PathBuf> {
 fn allowed_text_file(path: &Path) -> bool {
     matches!(
         path.extension().and_then(OsStr::to_str),
-        Some("rs" | "toml" | "lock" | "md" | "txt" | "json" | "yaml" | "yml")
+        Some(
+            "rs" | "toml"
+                | "lock"
+                | "md"
+                | "txt"
+                | "json"
+                | "yaml"
+                | "yml"
+                | "go"
+                | "mod"
+                | "sum"
+                | "py"
+                | "pyi"
+                | "cpp"
+                | "c"
+                | "cc"
+                | "cxx"
+                | "hpp"
+                | "h"
+                | "hxx"
+                | "cmake"
+        )
     ) || matches!(
         path.file_name().and_then(OsStr::to_str),
-        Some(".gitignore" | "LICENSE" | "LICENSE-MIT" | "LICENSE-APACHE" | "COPYING")
+        Some(
+            ".gitignore"
+                | "LICENSE"
+                | "LICENSE-MIT"
+                | "LICENSE-APACHE"
+                | "COPYING"
+                | "CMakeLists.txt"
+                | "requirements.txt"
+                | "go.mod"
+                | "go.sum"
+        )
     )
 }
 
@@ -836,6 +867,121 @@ async fn save_file(
     }))
 }
 
+fn detect_project_target(root: &Path) -> lab_node_sdk::LanguageTarget {
+    if root.join("go.mod").is_file() {
+        lab_node_sdk::LanguageTarget::Go
+    } else if root.join("requirements.txt").is_file() || root.join("main.py").is_file() {
+        lab_node_sdk::LanguageTarget::Python
+    } else if root.join("CMakeLists.txt").is_file() {
+        lab_node_sdk::LanguageTarget::Cpp
+    } else {
+        lab_node_sdk::LanguageTarget::Rust
+    }
+}
+
+async fn run_polyglot_process(
+    root: &Path,
+    target: lab_node_sdk::LanguageTarget,
+    action: CargoAction,
+) -> Result<(std::process::Output, &'static str), ApiError> {
+    let (exe_name, args, friendly_lang): (&str, Vec<&str>, &str) = match (target, action) {
+        (lab_node_sdk::LanguageTarget::Go, CargoAction::Fetch) => ("go", vec!["mod", "tidy"], "Go"),
+        (lab_node_sdk::LanguageTarget::Go, CargoAction::Check) => {
+            ("go", vec!["build", "./..."], "Go")
+        }
+        (lab_node_sdk::LanguageTarget::Go, CargoAction::Test) => {
+            ("go", vec!["test", "./..."], "Go")
+        }
+        (lab_node_sdk::LanguageTarget::Go, CargoAction::Run) => ("go", vec!["run", "."], "Go"),
+        (lab_node_sdk::LanguageTarget::Go, CargoAction::Clippy) => {
+            ("go", vec!["vet", "./..."], "Go")
+        }
+        (lab_node_sdk::LanguageTarget::Go, CargoAction::Fmt) => ("gofmt", vec!["-w", "."], "Go"),
+
+        (lab_node_sdk::LanguageTarget::Python, CargoAction::Fetch) => (
+            "python3",
+            vec!["-m", "pip", "install", "-r", "requirements.txt"],
+            "Python",
+        ),
+        (lab_node_sdk::LanguageTarget::Python, CargoAction::Check) => {
+            ("python3", vec!["-m", "py_compile", "main.py"], "Python")
+        }
+        (lab_node_sdk::LanguageTarget::Python, CargoAction::Test) => {
+            ("python3", vec!["-m", "unittest"], "Python")
+        }
+        (lab_node_sdk::LanguageTarget::Python, CargoAction::Run) => {
+            ("python3", vec!["main.py"], "Python")
+        }
+        (lab_node_sdk::LanguageTarget::Python, CargoAction::Clippy) => {
+            ("python3", vec!["-m", "py_compile", "main.py"], "Python")
+        }
+        (lab_node_sdk::LanguageTarget::Python, CargoAction::Fmt) => {
+            ("python3", vec!["-m", "py_compile", "main.py"], "Python")
+        }
+
+        (lab_node_sdk::LanguageTarget::Cpp, CargoAction::Fetch) => {
+            ("cmake", vec!["-B", "build"], "C++")
+        }
+        (lab_node_sdk::LanguageTarget::Cpp, CargoAction::Check) => {
+            ("cmake", vec!["--build", "build"], "C++")
+        }
+        (lab_node_sdk::LanguageTarget::Cpp, CargoAction::Test) => {
+            ("ctest", vec!["--test-dir", "build"], "C++")
+        }
+        (lab_node_sdk::LanguageTarget::Cpp, CargoAction::Run) => {
+            ("cmake", vec!["--build", "build"], "C++")
+        }
+        (lab_node_sdk::LanguageTarget::Cpp, CargoAction::Clippy) => {
+            ("cmake", vec!["--build", "build"], "C++")
+        }
+        (lab_node_sdk::LanguageTarget::Cpp, CargoAction::Fmt) => {
+            ("cmake", vec!["--build", "build"], "C++")
+        }
+
+        _ => unreachable!(),
+    };
+
+    let bin_path = find_executable(exe_name);
+    let Some(bin) = bin_path else {
+        #[cfg(unix)]
+        use std::os::unix::process::ExitStatusExt;
+        #[cfg(windows)]
+        use std::os::windows::process::ExitStatusExt;
+
+        #[cfg(unix)]
+        let status = std::process::ExitStatus::from_raw(1 << 8);
+        #[cfg(windows)]
+        let status = std::process::ExitStatus::from_raw(1);
+
+        let err_msg = format!(
+            "Toolchain binary '{exe_name}' not found on host.\nPlease install {friendly_lang} on your system to execute this action.\n"
+        );
+        let output = std::process::Output {
+            status,
+            stdout: Vec::new(),
+            stderr: err_msg.into_bytes(),
+        };
+        return Ok((output, "system-check"));
+    };
+
+    let mut cmd = tokio::process::Command::new(bin);
+    cmd.current_dir(root);
+    cmd.args(args);
+    cmd.kill_on_drop(true);
+
+    let output = tokio::time::timeout(Duration::from_secs(30), cmd.output())
+        .await
+        .map_err(|_| {
+            api_error(
+                StatusCode::GATEWAY_TIMEOUT,
+                "Execution timed out (30s limit)",
+            )
+        })?
+        .map_err(|err| api_error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?;
+
+    Ok((output, "host-process"))
+}
+
 async fn run_cargo(
     State(state): State<AppState>,
     Json(request): Json<CargoCommandRequest>,
@@ -858,7 +1004,10 @@ async fn run_cargo(
         .canonicalize()
         .map_err(|err| api_error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?;
     let started = Instant::now();
-    let (output, sandbox) = if matches!(request.action, CargoAction::Fetch) {
+    let target = detect_project_target(&root);
+    let (output, sandbox) = if target != lab_node_sdk::LanguageTarget::Rust {
+        run_polyglot_process(&root, target, request.action).await?
+    } else if matches!(request.action, CargoAction::Fetch) {
         docker_cargo(&root, &cache, request.action.args(), true, true).await?
     } else {
         sandboxed_cargo(&root, &cache, request.action).await?
@@ -1194,7 +1343,10 @@ async fn search_crates(
 
             let matches: Vec<CrateSummary> = catalog
                 .iter()
-                .filter(|(name, _, desc, _)| name.to_lowercase().contains(&term_lower) || desc.to_lowercase().contains(&term_lower))
+                .filter(|(name, _, desc, _)| {
+                    name.to_lowercase().contains(&term_lower)
+                        || desc.to_lowercase().contains(&term_lower)
+                })
                 .map(|&(name, ver, desc, dls)| CrateSummary {
                     name: name.to_string(),
                     max_version: ver.to_string(),
@@ -1224,7 +1376,10 @@ async fn search_crates(
 
             let matches: Vec<CrateSummary> = catalog
                 .iter()
-                .filter(|(name, _, desc, _)| name.to_lowercase().contains(&term_lower) || desc.to_lowercase().contains(&term_lower))
+                .filter(|(name, _, desc, _)| {
+                    name.to_lowercase().contains(&term_lower)
+                        || desc.to_lowercase().contains(&term_lower)
+                })
                 .map(|&(name, ver, desc, dls)| CrateSummary {
                     name: name.to_string(),
                     max_version: ver.to_string(),
@@ -1250,7 +1405,10 @@ async fn search_crates(
 
             let matches: Vec<CrateSummary> = catalog
                 .iter()
-                .filter(|(name, _, desc, _)| name.to_lowercase().contains(&term_lower) || desc.to_lowercase().contains(&term_lower))
+                .filter(|(name, _, desc, _)| {
+                    name.to_lowercase().contains(&term_lower)
+                        || desc.to_lowercase().contains(&term_lower)
+                })
                 .map(|&(name, ver, desc, dls)| CrateSummary {
                     name: name.to_string(),
                     max_version: ver.to_string(),
@@ -1267,7 +1425,10 @@ async fn search_crates(
                 .query(&[("q", term), ("per_page", "12"), ("page", "1")])
                 .header(
                     reqwest::header::USER_AGENT,
-                    concat!(env!("CARGO_PKG_VERSION"), " polyglot-lab educational workspace"),
+                    concat!(
+                        env!("CARGO_PKG_VERSION"),
+                        " polyglot-lab educational workspace"
+                    ),
                 )
                 .timeout(Duration::from_secs(10))
                 .send()
@@ -1370,7 +1531,10 @@ async fn add_dependency(
         }
         return Ok(Json(DependencyResponse {
             success: true,
-            stdout: format!("Added module {} v{} to go.mod\n", request.crate_name, request.version),
+            stdout: format!(
+                "Added module {} v{} to go.mod\n",
+                request.crate_name, request.version
+            ),
             stderr: String::new(),
         }));
     } else if root.join("requirements.txt").is_file() {
@@ -1384,13 +1548,19 @@ async fn add_dependency(
         }
         return Ok(Json(DependencyResponse {
             success: true,
-            stdout: format!("Added package {} >= {} to requirements.txt\n", request.crate_name, request.version),
+            stdout: format!(
+                "Added package {} >= {} to requirements.txt\n",
+                request.crate_name, request.version
+            ),
             stderr: String::new(),
         }));
     } else if root.join("CMakeLists.txt").is_file() {
         let cmake_path = root.join("CMakeLists.txt");
         let mut content = fs::read_to_string(&cmake_path).unwrap_or_default();
-        let dep_line = format!("\n# Dependency: find_package({} REQUIRED)\n", request.crate_name);
+        let dep_line = format!(
+            "\n# Dependency: find_package({} REQUIRED)\n",
+            request.crate_name
+        );
         if !content.contains(&request.crate_name) {
             content.push_str(&dep_line);
             fs::write(&cmake_path, content)
@@ -1398,7 +1568,10 @@ async fn add_dependency(
         }
         return Ok(Json(DependencyResponse {
             success: true,
-            stdout: format!("Added dependency {} to CMakeLists.txt\n", request.crate_name),
+            stdout: format!(
+                "Added dependency {} to CMakeLists.txt\n",
+                request.crate_name
+            ),
             stderr: String::new(),
         }));
     }
