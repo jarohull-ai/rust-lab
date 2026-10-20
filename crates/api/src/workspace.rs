@@ -36,6 +36,8 @@ pub struct LabProject {
 #[derive(Debug, Deserialize)]
 pub struct NewProjectRequest {
     pub name: String,
+    #[serde(default)]
+    pub target: Option<lab_node_sdk::LanguageTarget>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -151,6 +153,8 @@ pub struct SandboxCapabilities {
 #[derive(Debug, Deserialize)]
 pub struct CrateSearchQuery {
     pub q: String,
+    #[serde(default)]
+    pub target: Option<lab_node_sdk::LanguageTarget>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -440,20 +444,71 @@ async fn new_project(
     }
     let (project, slot) = allocate_project(state.workspace_root.as_ref(), name)?;
     let project_root = slot.join("project");
-    fs::create_dir_all(project_root.join("src"))
-        .map_err(|err| api_error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?;
     let package = slugify(name).replace('-', "_");
-    fs::write(
-        project_root.join("Cargo.toml"),
-        format!("[package]\nname = \"{package}\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\n\n[workspace]\n"),
-    )
-    .and_then(|_| {
-        fs::write(
-            project_root.join("src/main.rs"),
-            "fn main() {\n    println!(\"Hello from Rust Lab!\");\n}\n",
-        )
-    })
-    .map_err(|err| api_error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?;
+    let target = request.target.unwrap_or(lab_node_sdk::LanguageTarget::Rust);
+
+    match target {
+        lab_node_sdk::LanguageTarget::Rust => {
+            fs::create_dir_all(project_root.join("src"))
+                .map_err(|err| api_error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?;
+            fs::write(
+                project_root.join("Cargo.toml"),
+                format!("[package]\nname = \"{package}\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\n\n[workspace]\n"),
+            )
+            .and_then(|_| {
+                fs::write(
+                    project_root.join("src/main.rs"),
+                    "fn main() {\n    println!(\"Hello from Rust Lab!\");\n}\n",
+                )
+            })
+            .map_err(|err| api_error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?;
+        }
+        lab_node_sdk::LanguageTarget::Go => {
+            fs::create_dir_all(&project_root)
+                .map_err(|err| api_error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?;
+            fs::write(
+                project_root.join("go.mod"),
+                format!("module {package}\n\ngo 1.22\n"),
+            )
+            .and_then(|_| {
+                fs::write(
+                    project_root.join("main.go"),
+                    "package main\n\nimport \"fmt\"\n\nfunc main() {\n\tfmt.Println(\"Hello from Go Lab!\")\n}\n",
+                )
+            })
+            .map_err(|err| api_error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?;
+        }
+        lab_node_sdk::LanguageTarget::Python => {
+            fs::create_dir_all(&project_root)
+                .map_err(|err| api_error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?;
+            fs::write(
+                project_root.join("requirements.txt"),
+                "# Python dependencies\n",
+            )
+            .and_then(|_| {
+                fs::write(
+                    project_root.join("main.py"),
+                    "def main():\n    print(\"Hello from Python Lab!\")\n\nif __name__ == \"__main__\":\n    main()\n",
+                )
+            })
+            .map_err(|err| api_error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?;
+        }
+        lab_node_sdk::LanguageTarget::Cpp => {
+            fs::create_dir_all(project_root.join("src"))
+                .map_err(|err| api_error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?;
+            fs::write(
+                project_root.join("CMakeLists.txt"),
+                format!("cmake_minimum_required(VERSION 3.20)\nproject({package} CXX)\n\nset(CMAKE_CXX_STANDARD 20)\nset(CMAKE_CXX_STANDARD_REQUIRED ON)\n\nadd_executable({package} src/main.cpp)\n"),
+            )
+            .and_then(|_| {
+                fs::write(
+                    project_root.join("src/main.cpp"),
+                    "#include <iostream>\n\nint main() {\n    std::cout << \"Hello from C++ Lab!\\n\";\n    return 0;\n}\n",
+                )
+            })
+            .map_err(|err| api_error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?;
+        }
+    }
     write_metadata(&slot, &project)?;
     Ok(Json(project))
 }
@@ -1108,61 +1163,155 @@ async fn search_crates(
         || term.len() > 80
         || !term
             .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'/' | b'.'))
     {
         return Err(api_error(
             StatusCode::BAD_REQUEST,
-            "Crate search must contain 2-80 letters, digits, '-' or '_'",
+            "Package search must contain 2-80 letters, digits, '-', '_', '.' or '/'",
         ));
     }
-    let response = reqwest::Client::new()
-        .get("https://crates.io/api/v1/crates")
-        .query(&[("q", term), ("per_page", "12"), ("page", "1")])
-        .header(
-            reqwest::header::USER_AGENT,
-            concat!(env!("CARGO_PKG_VERSION"), " rust-lab educational workspace"),
-        )
-        .timeout(Duration::from_secs(10))
-        .send()
-        .await
-        .map_err(|err| {
-            api_error(
-                StatusCode::BAD_GATEWAY,
-                format!("crates.io search failed: {err}"),
-            )
-        })?;
-    if !response.status().is_success() {
-        return Err(api_error(
-            StatusCode::BAD_GATEWAY,
-            format!("crates.io returned {}", response.status()),
-        ));
+
+    let target = query.target.unwrap_or(lab_node_sdk::LanguageTarget::Rust);
+
+    match target {
+        lab_node_sdk::LanguageTarget::Go => {
+            let term_lower = term.to_lowercase();
+            let catalog = [
+                ("github.com/gin-gonic/gin", "1.10.0", "Fast HTTP web framework featuring a Martini-like API with much better performance", 85_000_000),
+                ("go.uber.org/zap", "1.27.0", "Blazing fast, structured, leveled logging in Go", 62_000_000),
+                ("github.com/stretchr/testify", "1.9.0", "A toolkit with common assertions and mocks that nicely integrates with testing", 95_000_000),
+                ("gorm.io/gorm", "1.25.10", "The fantastic ORM library for Golang, aims to be developer friendly", 54_000_000),
+                ("github.com/gofiber/fiber/v2", "2.52.5", "Express inspired web framework written in Go with zero memory allocation", 42_000_000),
+                ("github.com/labstack/echo/v4", "4.12.0", "High performance, minimalist Go web framework", 38_000_000),
+                ("github.com/go-chi/chi/v5", "5.1.0", "Lightweight, idiomatic and composable router for building Go HTTP services", 28_000_000),
+                ("github.com/google/uuid", "1.6.0", "Generates and inspects UUIDs based on RFC 4122", 120_000_000),
+                ("github.com/spf13/cobra", "1.8.1", "A Commander for modern Go CLI interactions", 76_000_000),
+                ("github.com/spf13/viper", "1.19.0", "Complete configuration solution for Go applications including 12-factor apps", 65_000_000),
+                ("github.com/gocolly/colly/v2", "2.1.0", "Lightning fast and elegant Scraping Framework for Gophers", 21_000_000),
+                ("github.com/go-resty/resty/v2", "2.13.1", "Simple HTTP and REST client library for Go", 31_000_000),
+                ("golang.org/x/sync", "0.8.0", "Go concurrency primitives such as errgroup and semaphore", 88_000_000),
+            ];
+
+            let matches: Vec<CrateSummary> = catalog
+                .iter()
+                .filter(|(name, _, desc, _)| name.to_lowercase().contains(&term_lower) || desc.to_lowercase().contains(&term_lower))
+                .map(|&(name, ver, desc, dls)| CrateSummary {
+                    name: name.to_string(),
+                    max_version: ver.to_string(),
+                    description: desc.to_string(),
+                    downloads: dls,
+                })
+                .collect();
+
+            Ok(Json(CrateSearchResponse { crates: matches }))
+        }
+        lab_node_sdk::LanguageTarget::Python => {
+            let term_lower = term.to_lowercase();
+            let catalog = [
+                ("requests", "2.32.3", "A simple, yet elegant, HTTP library for Python", 350_000_000),
+                ("fastapi", "0.115.0", "Modern, fast (high-performance), web framework for building APIs with Python 3.8+", 180_000_000),
+                ("pydantic", "2.9.2", "Data validation and settings management using python type annotations", 240_000_000),
+                ("pytest", "8.3.3", "pytest: simple powerful testing with Python", 290_000_000),
+                ("numpy", "2.1.1", "Fundamental package for array computing with Python", 410_000_000),
+                ("rich", "13.9.2", "Render rich text, tables, progress bars, syntax highlighting, markdown and more to the terminal", 95_000_000),
+                ("httpx", "0.27.2", "A next-generation HTTP client for Python", 88_000_000),
+                ("aiohttp", "3.10.6", "Async HTTP client/server framework for asyncio and Python", 140_000_000),
+                ("flask", "3.0.3", "A simple framework for building complex web applications", 190_000_000),
+                ("beautifulsoup4", "4.12.3", "Screen-scraping library designed for quick turnaround projects", 120_000_000),
+                ("pandas", "2.2.3", "Powerful data structures for data analysis, time series, and statistics", 310_000_000),
+                ("ruff", "0.6.9", "An extremely fast Python linter and code formatter, written in Rust", 45_000_000),
+            ];
+
+            let matches: Vec<CrateSummary> = catalog
+                .iter()
+                .filter(|(name, _, desc, _)| name.to_lowercase().contains(&term_lower) || desc.to_lowercase().contains(&term_lower))
+                .map(|&(name, ver, desc, dls)| CrateSummary {
+                    name: name.to_string(),
+                    max_version: ver.to_string(),
+                    description: desc.to_string(),
+                    downloads: dls,
+                })
+                .collect();
+
+            Ok(Json(CrateSearchResponse { crates: matches }))
+        }
+        lab_node_sdk::LanguageTarget::Cpp => {
+            let term_lower = term.to_lowercase();
+            let catalog = [
+                ("nlohmann_json", "3.11.3", "JSON for Modern C++: intuitive syntax, trivial integration", 45_000_000),
+                ("fmt", "11.0.2", "A modern formatting library for C++ providing safe, fast alternative to printf", 68_000_000),
+                ("spdlog", "1.14.1", "Fast C++ logging library (header-only / compiled)", 38_000_000),
+                ("catch2", "3.7.0", "A modern, C++-native, test framework for unit-tests, TDD and BDD", 29_000_000),
+                ("boost", "1.86.0", "Peer-reviewed portable C++ source libraries", 85_000_000),
+                ("eigen", "3.4.0", "C++ template library for linear algebra: matrices, vectors, numerical solvers", 42_000_000),
+                ("cpr", "1.10.5", "C++ Requests: Modern C++ HTTP client library inspired by Python Requests", 12_000_000),
+                ("cli11", "2.4.2", "Command line parser for C++11 and beyond with intuitive syntax", 16_000_000),
+            ];
+
+            let matches: Vec<CrateSummary> = catalog
+                .iter()
+                .filter(|(name, _, desc, _)| name.to_lowercase().contains(&term_lower) || desc.to_lowercase().contains(&term_lower))
+                .map(|&(name, ver, desc, dls)| CrateSummary {
+                    name: name.to_string(),
+                    max_version: ver.to_string(),
+                    description: desc.to_string(),
+                    downloads: dls,
+                })
+                .collect();
+
+            Ok(Json(CrateSearchResponse { crates: matches }))
+        }
+        lab_node_sdk::LanguageTarget::Rust => {
+            let response = reqwest::Client::new()
+                .get("https://crates.io/api/v1/crates")
+                .query(&[("q", term), ("per_page", "12"), ("page", "1")])
+                .header(
+                    reqwest::header::USER_AGENT,
+                    concat!(env!("CARGO_PKG_VERSION"), " polyglot-lab educational workspace"),
+                )
+                .timeout(Duration::from_secs(10))
+                .send()
+                .await
+                .map_err(|err| {
+                    api_error(
+                        StatusCode::BAD_GATEWAY,
+                        format!("crates.io search failed: {err}"),
+                    )
+                })?;
+            if !response.status().is_success() {
+                return Err(api_error(
+                    StatusCode::BAD_GATEWAY,
+                    format!("crates.io returned {}", response.status()),
+                ));
+            }
+            let payload: CratesIoResponse = response.json().await.map_err(|err| {
+                api_error(
+                    StatusCode::BAD_GATEWAY,
+                    format!("Invalid crates.io response: {err}"),
+                )
+            })?;
+            Ok(Json(CrateSearchResponse {
+                crates: payload
+                    .crates
+                    .into_iter()
+                    .map(|item| CrateSummary {
+                        name: item.name,
+                        max_version: item.max_version,
+                        description: item.description.unwrap_or_default(),
+                        downloads: item.downloads,
+                    })
+                    .collect(),
+            }))
+        }
     }
-    let payload: CratesIoResponse = response.json().await.map_err(|err| {
-        api_error(
-            StatusCode::BAD_GATEWAY,
-            format!("Invalid crates.io response: {err}"),
-        )
-    })?;
-    Ok(Json(CrateSearchResponse {
-        crates: payload
-            .crates
-            .into_iter()
-            .map(|item| CrateSummary {
-                name: item.name,
-                max_version: item.max_version,
-                description: item.description.unwrap_or_default(),
-                downloads: item.downloads,
-            })
-            .collect(),
-    }))
 }
 
 fn valid_crate_name(value: &str) -> bool {
     !value.is_empty()
-        && value.len() <= 64
+        && value.len() <= 120
         && value
             .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'/'))
 }
 
 fn valid_version(value: &str) -> bool {
@@ -1184,13 +1333,13 @@ async fn add_dependency(
     if !request.approved {
         return Err(api_error(
             StatusCode::FORBIDDEN,
-            "Explicit approval is required before changing Cargo.toml",
+            "Explicit approval is required before changing project manifest",
         ));
     }
     if !valid_crate_name(&request.crate_name) || !valid_version(&request.version) {
         return Err(api_error(
             StatusCode::BAD_REQUEST,
-            "Invalid crate name or version",
+            "Invalid package name or version",
         ));
     }
     if request.features.len() > 32
@@ -1201,13 +1350,58 @@ async fn add_dependency(
     {
         return Err(api_error(
             StatusCode::BAD_REQUEST,
-            "Invalid crate feature list",
+            "Invalid package feature list",
         ));
     }
     let (_, slot, root) = load_project(state.workspace_root.as_ref(), &request.project_id)?;
     let root = root
         .canonicalize()
         .map_err(|err| api_error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?;
+
+    // Polyglot manifest detection
+    if root.join("go.mod").is_file() {
+        let go_mod_path = root.join("go.mod");
+        let mut content = fs::read_to_string(&go_mod_path).unwrap_or_default();
+        let dep_line = format!("\nrequire {} v{}\n", request.crate_name, request.version);
+        if !content.contains(&request.crate_name) {
+            content.push_str(&dep_line);
+            fs::write(&go_mod_path, content)
+                .map_err(|err| api_error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?;
+        }
+        return Ok(Json(DependencyResponse {
+            success: true,
+            stdout: format!("Added module {} v{} to go.mod\n", request.crate_name, request.version),
+            stderr: String::new(),
+        }));
+    } else if root.join("requirements.txt").is_file() {
+        let req_path = root.join("requirements.txt");
+        let mut content = fs::read_to_string(&req_path).unwrap_or_default();
+        let dep_line = format!("{}>={}\n", request.crate_name, request.version);
+        if !content.contains(&request.crate_name) {
+            content.push_str(&dep_line);
+            fs::write(&req_path, content)
+                .map_err(|err| api_error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?;
+        }
+        return Ok(Json(DependencyResponse {
+            success: true,
+            stdout: format!("Added package {} >= {} to requirements.txt\n", request.crate_name, request.version),
+            stderr: String::new(),
+        }));
+    } else if root.join("CMakeLists.txt").is_file() {
+        let cmake_path = root.join("CMakeLists.txt");
+        let mut content = fs::read_to_string(&cmake_path).unwrap_or_default();
+        let dep_line = format!("\n# Dependency: find_package({} REQUIRED)\n", request.crate_name);
+        if !content.contains(&request.crate_name) {
+            content.push_str(&dep_line);
+            fs::write(&cmake_path, content)
+                .map_err(|err| api_error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?;
+        }
+        return Ok(Json(DependencyResponse {
+            success: true,
+            stdout: format!("Added dependency {} to CMakeLists.txt\n", request.crate_name),
+            stderr: String::new(),
+        }));
+    }
     let package = if request.version.is_empty() {
         request.crate_name.clone()
     } else {

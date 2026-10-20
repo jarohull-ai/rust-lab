@@ -1,6 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import { rust } from '@codemirror/lang-rust';
+import { go } from '@codemirror/lang-go';
+import { python } from '@codemirror/lang-python';
+import { cpp } from '@codemirror/lang-cpp';
 import {
   Beaker,
   Box,
@@ -28,6 +31,7 @@ import {
   CrateSummary,
   LabFile,
   LabProject,
+  LanguageTarget,
   SandboxCapabilities,
   WorkspaceEntry,
   WorkspaceTree,
@@ -42,7 +46,11 @@ async function apiJson<T>(url: string, init?: RequestInit): Promise<T> {
   return body as T;
 }
 
-export const WorkspaceLab: React.FC = () => {
+interface WorkspaceLabProps {
+  target?: LanguageTarget;
+}
+
+export const WorkspaceLab: React.FC<WorkspaceLabProps> = ({ target = 'rust' }) => {
   const { t } = useI18n();
   const [projects, setProjects] = useState<LabProject[]>([]);
   const [activeProject, setActiveProject] = useState<LabProject | null>(null);
@@ -50,7 +58,23 @@ export const WorkspaceLab: React.FC = () => {
   const [selectedPath, setSelectedPath] = useState('');
   const [content, setContent] = useState('');
   const [savedContent, setSavedContent] = useState('');
-  const [newName, setNewName] = useState('Rust Prototype');
+
+  const defaultNewName = useMemo(() => {
+    switch (target) {
+      case 'go': return 'Go Prototype';
+      case 'python': return 'Python Script';
+      case 'cpp': return 'C++ Project';
+      case 'rust':
+      default: return 'Rust Prototype';
+    }
+  }, [target]);
+
+  const [newName, setNewName] = useState(defaultNewName);
+
+  useEffect(() => {
+    setNewName(defaultNewName);
+  }, [defaultNewName]);
+
   const [githubUrl, setGithubUrl] = useState('');
   const [githubRef, setGithubRef] = useState('');
   const [crateQuery, setCrateQuery] = useState('');
@@ -99,13 +123,14 @@ export const WorkspaceLab: React.FC = () => {
   }, [activeProject?.id, refreshTree]);
 
   const createProject = async () => {
+    if (!newName.trim()) return;
     setBusy('create');
     setError('');
     try {
       const project = await apiJson<LabProject>('/api/lab/projects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newName }),
+        body: JSON.stringify({ name: newName, target }),
       });
       await refreshProjects();
       setActiveProject(project);
@@ -174,19 +199,61 @@ export const WorkspaceLab: React.FC = () => {
     }
   };
 
-  const runCargo = async (action: CargoAction) => {
-    if (!activeProject || !window.confirm(t('lab.executionApproval', { action }))) return;
-    setBusy(action);
+  const getToolchainActions = () => {
+    switch (target) {
+      case 'go':
+        return [
+          { action: 'fetch' as CargoAction, label: 'tidy', icon: PackagePlus, cmd: 'go mod tidy' },
+          { action: 'check' as CargoAction, label: 'build', icon: Check, cmd: 'go build ./...' },
+          { action: 'test' as CargoAction, label: 'test', icon: TestTube2, cmd: 'go test ./...' },
+          { action: 'run' as CargoAction, label: 'run', icon: Play, cmd: 'go run .' },
+          { action: 'clippy' as CargoAction, label: 'vet', icon: ShieldCheck, cmd: 'go vet ./...' },
+          { action: 'fmt' as CargoAction, label: 'fmt', icon: WandSparkles, cmd: 'gofmt -w .' },
+        ];
+      case 'python':
+        return [
+          { action: 'fetch' as CargoAction, label: 'sync', icon: PackagePlus, cmd: 'pip install -r requirements.txt' },
+          { action: 'check' as CargoAction, label: 'check', icon: Check, cmd: 'python3 -m py_compile main.py' },
+          { action: 'test' as CargoAction, label: 'test', icon: TestTube2, cmd: 'python3 -m unittest' },
+          { action: 'run' as CargoAction, label: 'run', icon: Play, cmd: 'python3 main.py' },
+          { action: 'clippy' as CargoAction, label: 'ruff', icon: ShieldCheck, cmd: 'ruff check .' },
+          { action: 'fmt' as CargoAction, label: 'fmt', icon: WandSparkles, cmd: 'black .' },
+        ];
+      case 'cpp':
+        return [
+          { action: 'fetch' as CargoAction, label: 'cmake', icon: PackagePlus, cmd: 'cmake -B build' },
+          { action: 'check' as CargoAction, label: 'build', icon: Check, cmd: 'cmake --build build' },
+          { action: 'test' as CargoAction, label: 'test', icon: TestTube2, cmd: 'ctest --test-dir build' },
+          { action: 'run' as CargoAction, label: 'run', icon: Play, cmd: './build/app' },
+          { action: 'clippy' as CargoAction, label: 'tidy', icon: ShieldCheck, cmd: 'clang-tidy' },
+          { action: 'fmt' as CargoAction, label: 'fmt', icon: WandSparkles, cmd: 'clang-format -i' },
+        ];
+      case 'rust':
+      default:
+        return [
+          { action: 'fetch' as CargoAction, label: 'fetch', icon: PackagePlus, cmd: 'cargo fetch' },
+          { action: 'check' as CargoAction, label: 'check', icon: Check, cmd: 'cargo check' },
+          { action: 'test' as CargoAction, label: 'test', icon: TestTube2, cmd: 'cargo test' },
+          { action: 'run' as CargoAction, label: 'run', icon: Play, cmd: 'cargo run' },
+          { action: 'clippy' as CargoAction, label: 'clippy', icon: ShieldCheck, cmd: 'cargo clippy' },
+          { action: 'fmt' as CargoAction, label: 'fmt', icon: WandSparkles, cmd: 'cargo fmt' },
+        ];
+    }
+  };
+
+  const runCommand = async (actionItem: { action: CargoAction; label: string; cmd: string }) => {
+    if (!activeProject || !window.confirm(t('lab.executionApproval', { action: actionItem.label }))) return;
+    setBusy(actionItem.action);
     setError('');
-    setOutput(`$ cargo ${action}\n`);
+    setOutput(`$ ${actionItem.cmd}\n`);
     try {
       const result = await apiJson<CargoCommandResponse>('/api/lab/cargo', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ project_id: activeProject.id, action, approved: true }),
+        body: JSON.stringify({ project_id: activeProject.id, action: actionItem.action, approved: true }),
       });
       setOutput(
-        `$ cargo ${action}\n${result.stdout}${result.stderr}\n[${result.success ? 'ok' : 'failed'} · ${result.duration_ms} ms · sandbox: ${result.sandbox}]`,
+        `$ ${actionItem.cmd}\n${result.stdout}${result.stderr}\n[${result.success ? 'ok' : 'failed'} · ${result.duration_ms} ms · sandbox: ${result.sandbox}]`,
       );
       await refreshTree(activeProject);
     } catch (cause) {
@@ -196,12 +263,12 @@ export const WorkspaceLab: React.FC = () => {
     }
   };
 
-  const searchCrates = async () => {
+  const searchPackages = async () => {
     setBusy('search');
     setError('');
     try {
       const result = await apiJson<{ crates: CrateSummary[] }>(
-        `/api/lab/crates/search?q=${encodeURIComponent(crateQuery)}`,
+        `/api/lab/crates/search?q=${encodeURIComponent(crateQuery)}&target=${target}`,
       );
       setCrateResults(result.crates);
     } catch (cause) {
@@ -211,9 +278,9 @@ export const WorkspaceLab: React.FC = () => {
     }
   };
 
-  const addCrate = async (crateItem: CrateSummary) => {
-    if (!activeProject || !window.confirm(t('lab.dependencyApproval', { name: crateItem.name, version: crateItem.max_version }))) return;
-    setBusy(`crate:${crateItem.name}`);
+  const addPackage = async (packageItem: CrateSummary) => {
+    if (!activeProject || !window.confirm(t('lab.dependencyApproval', { name: packageItem.name, version: packageItem.max_version }))) return;
+    setBusy(`pkg:${packageItem.name}`);
     setError('');
     try {
       const result = await apiJson<{ success: boolean; stdout: string; stderr: string }>(
@@ -223,17 +290,16 @@ export const WorkspaceLab: React.FC = () => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             project_id: activeProject.id,
-            crate_name: crateItem.name,
-            version: crateItem.max_version,
+            crate_name: packageItem.name,
+            version: packageItem.max_version,
             features: [],
             default_features: true,
             approved: true,
           }),
         },
       );
-      setOutput(`$ cargo add ${crateItem.name}@${crateItem.max_version}\n${result.stdout}${result.stderr}`);
+      setOutput(`Added package: ${packageItem.name}@${packageItem.max_version}\n${result.stdout}${result.stderr}`);
       await refreshTree(activeProject);
-      if (selectedPath === 'Cargo.toml') await openFile('Cargo.toml');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -241,12 +307,37 @@ export const WorkspaceLab: React.FC = () => {
     }
   };
 
+  const getCodeMirrorExtension = (path: string) => {
+    if (path.endsWith('.go')) return [go()];
+    if (path.endsWith('.py')) return [python()];
+    if (path.endsWith('.cpp') || path.endsWith('.hpp') || path.endsWith('.h')) return [cpp()];
+    if (path.endsWith('.rs')) return [rust()];
+    return [];
+  };
+
+  const getPackageRegistryInfo = () => {
+    switch (target) {
+      case 'go':
+        return { title: 'pkg.go.dev (Go Modules)', placeholder: 'Search Go modules (e.g. gin, zap, gorm)...' };
+      case 'python':
+        return { title: 'pypi.org (Python Packages)', placeholder: 'Search PyPI (e.g. requests, fastapi)...' };
+      case 'cpp':
+        return { title: 'C++ Libraries (Registry)', placeholder: 'Search C++ libraries (e.g. json, fmt)...' };
+      case 'rust':
+      default:
+        return { title: 'crates.io (Rust Crates)', placeholder: t('lab.searchCrates') };
+    }
+  };
+
+  const packageInfo = getPackageRegistryInfo();
+  const toolchainActions = getToolchainActions();
+
   return (
     <main className="flex min-h-0 flex-1 bg-slate-950 text-slate-100">
       <aside className="flex w-72 shrink-0 flex-col border-r border-slate-800 bg-slate-900/80">
         <div className="border-b border-slate-800 p-3">
           <div className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-orange-300">
-            <Beaker className="h-4 w-4" /> {t('lab.projects')}
+            <Beaker className="h-4 w-4" /> {t('lab.projects')} ({target.toUpperCase()})
           </div>
           <div className="flex gap-1.5">
             <input value={newName} onChange={(event) => setNewName(event.target.value)} maxLength={80} className="min-w-0 flex-1 rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs" aria-label={t('lab.newName')} />
@@ -273,7 +364,13 @@ export const WorkspaceLab: React.FC = () => {
         <div className="min-h-0 flex-1 overflow-auto p-2 font-mono text-[11px]">
           {entries.map((entry) => (
             <button key={entry.path} type="button" disabled={entry.kind === 'directory'} onClick={() => openFile(entry.path)} className={`flex w-full items-center gap-1.5 rounded px-2 py-1 text-left ${selectedPath === entry.path ? 'bg-cyan-500/15 text-cyan-300' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'} disabled:hover:bg-transparent`}>
-              {entry.kind === 'directory' ? <Folder className="h-3.5 w-3.5 text-yellow-500" /> : entry.path.endsWith('.rs') ? <FileCode2 className="h-3.5 w-3.5 text-orange-400" /> : <FileText className="h-3.5 w-3.5 text-slate-500" />}
+              {entry.kind === 'directory' ? (
+                <Folder className="h-3.5 w-3.5 text-yellow-500" />
+              ) : entry.path.endsWith('.rs') || entry.path.endsWith('.go') || entry.path.endsWith('.py') || entry.path.endsWith('.cpp') ? (
+                <FileCode2 className="h-3.5 w-3.5 text-cyan-400" />
+              ) : (
+                <FileText className="h-3.5 w-3.5 text-slate-500" />
+              )}
               <span className="truncate">{entry.path}</span>
             </button>
           ))}
@@ -292,39 +389,33 @@ export const WorkspaceLab: React.FC = () => {
         </div>
         <div className="min-h-0 flex-1 bg-slate-950">
           {selectedPath ? (
-            <CodeMirror value={content} onChange={setContent} height="100%" theme="dark" extensions={selectedPath.endsWith('.rs') ? [rust()] : []} className="h-full text-sm" basicSetup={{ lineNumbers: true, foldGutter: true }} />
+            <CodeMirror value={content} onChange={setContent} height="100%" theme="dark" extensions={getCodeMirrorExtension(selectedPath)} className="h-full text-sm" basicSetup={{ lineNumbers: true, foldGutter: true }} />
           ) : (
             <div className="flex h-full flex-col items-center justify-center text-slate-600"><WandSparkles className="mb-3 h-10 w-10 text-orange-500/40" /><p className="text-sm">{t('lab.emptyEditor')}</p></div>
           )}
         </div>
         <div className="h-52 shrink-0 border-t border-slate-800 bg-slate-950">
-          <div className="flex h-9 items-center justify-between border-b border-slate-800 px-3">
-            <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400"><TerminalSquare className="h-3.5 w-3.5 text-emerald-400" />{t('lab.console')}</span>
-            {capabilities === undefined ? (
-              <span className="flex items-center gap-1 text-[9px] text-slate-500"><LoaderCircle className="h-3 w-3 animate-spin" />{t('lab.sandboxChecking')}</span>
-            ) : offlineReady ? (
-              <span className="flex items-center gap-1 text-[9px] text-emerald-500"><ShieldCheck className="h-3 w-3" />{t('lab.sandboxReady', { backend: capabilities?.preferred_backend ?? '' })}</span>
-            ) : (
-              <span className="flex items-center gap-1 text-[9px] text-amber-400"><CircleAlert className="h-3 w-3" />{t('lab.sandboxUnavailable')}</span>
-            )}
+          <div className="flex h-8 items-center justify-between border-b border-slate-800 px-3 text-[10px] font-mono text-slate-400">
+            <span className="flex items-center gap-1.5"><TerminalSquare className="h-3 w-3" />{t('lab.console')}</span>
+            {busy && <span className="flex items-center gap-1 text-cyan-400"><LoaderCircle className="h-3 w-3 animate-spin" />{busy}…</span>}
           </div>
-          <pre className="h-[calc(100%-2.25rem)] overflow-auto whitespace-pre-wrap p-3 font-mono text-[11px] leading-relaxed text-slate-300">{error ? `ERROR: ${error}\n\n${output}` : output}</pre>
+          <pre className="h-[calc(100%-2rem)] overflow-auto p-3 font-mono text-xs leading-relaxed text-slate-300 whitespace-pre-wrap">{output}</pre>
         </div>
       </section>
 
       <aside className="flex w-80 shrink-0 flex-col border-l border-slate-800 bg-slate-900/80">
         <div className="border-b border-slate-800 p-3">
-          <div className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-emerald-300"><TerminalSquare className="h-4 w-4" />Cargo</div>
-          <div className={`mb-2 rounded border px-2.5 py-2 text-[10px] leading-relaxed ${
-            capabilities === undefined
-              ? 'border-slate-700 bg-slate-950/60 text-slate-400'
-              : offlineReady
-                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
-                : 'border-amber-500/40 bg-amber-500/10 text-amber-200'
-          }`}>
-            <div className="flex items-start justify-between gap-2">
-              <span className="flex items-start gap-1.5">
-                {capabilities === undefined ? <LoaderCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 animate-spin" /> : offlineReady ? <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" /> : <CircleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />}
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-300">Toolchain ({target.toUpperCase()})</span>
+            {error && <span className="flex items-center gap-1 text-[10px] text-rose-400" title={error}><CircleAlert className="h-3 w-3" />{error}</span>}
+          </div>
+          <div className={`mb-3 rounded border p-2 text-[10px] ${capabilities === undefined ? 'border-slate-700 bg-slate-950/60 text-slate-400' : offlineReady ? 'border-emerald-800/80 bg-emerald-950/30 text-emerald-300' : 'border-amber-800/80 bg-amber-950/30 text-amber-300'}`}>
+            <div className="flex items-center justify-between gap-1">
+              <span className="font-semibold">{capabilities === undefined ? t('lab.sandboxChecking') : offlineReady ? t('lab.sandboxReady', { backend: capabilities?.preferred_backend ?? '' }) : t('lab.sandboxUnavailable')}</span>
+              <span className="rounded bg-black/30 px-1 py-0.5 text-[9px] font-mono">{t('lab.sandboxed')}</span>
+            </div>
+            <div className="mt-1 flex items-center justify-between gap-1 text-[9px] opacity-80">
+              <span className="truncate">
                 {capabilities === undefined
                   ? t('lab.sandboxChecking')
                   : offlineReady
@@ -340,28 +431,65 @@ export const WorkspaceLab: React.FC = () => {
             {capabilities && !fetchReady && <p className="mt-1 border-t border-current/10 pt-1 opacity-80">{t('lab.fetchUnavailable')}</p>}
           </div>
           <div className="grid grid-cols-3 gap-1.5">
-            {([
-              ['fetch', PackagePlus], ['check', Check], ['test', TestTube2], ['run', Play], ['clippy', ShieldCheck], ['fmt', WandSparkles],
-            ] as const).map(([action, Icon]) => (
-              <button key={action} type="button" onClick={() => runCargo(action)} disabled={!activeProject || busy !== '' || (action === 'fetch' ? !fetchReady : !offlineReady)} className="flex items-center justify-center gap-1 rounded border border-slate-700 bg-slate-800 px-2 py-2 text-[10px] font-semibold text-slate-200 hover:border-emerald-500/60 hover:bg-slate-700 disabled:opacity-35"><Icon className={`h-3.5 w-3.5 ${busy === action ? 'animate-spin' : ''}`} />{action}</button>
-            ))}
+            {toolchainActions.map((item) => {
+              const Icon = item.icon;
+              return (
+                <button
+                  key={item.label}
+                  type="button"
+                  onClick={() => runCommand(item)}
+                  disabled={!activeProject || busy !== '' || (item.action === 'fetch' ? !fetchReady : !offlineReady)}
+                  className="flex items-center justify-center gap-1 rounded border border-slate-700 bg-slate-800 px-2 py-2 text-[10px] font-semibold text-slate-200 hover:border-emerald-500/60 hover:bg-slate-700 disabled:opacity-35"
+                  title={item.cmd}
+                >
+                  <Icon className={`h-3.5 w-3.5 ${busy === item.action ? 'animate-spin' : ''}`} />
+                  {item.label}
+                </button>
+              );
+            })}
             <button type="button" onClick={() => activeProject && refreshTree(activeProject)} disabled={!activeProject || busy !== ''} className="flex items-center justify-center gap-1 rounded border border-slate-700 bg-slate-800 px-2 py-2 text-[10px] font-semibold text-slate-200 hover:bg-slate-700 disabled:opacity-35"><RefreshCw className="h-3.5 w-3.5" />{t('lab.refresh')}</button>
           </div>
           <p className="mt-2 text-[9px] leading-relaxed text-slate-500">{t('lab.sandboxNote')}</p>
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col p-3">
-          <div className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-cyan-300"><Box className="h-4 w-4" />crates.io</div>
+          <div className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-cyan-300">
+            <Box className="h-4 w-4" /> {packageInfo.title}
+          </div>
           <div className="flex gap-1.5">
-            <input value={crateQuery} onChange={(event) => setCrateQuery(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && searchCrates()} placeholder={t('lab.searchCrates')} className="min-w-0 flex-1 rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs" />
-            <button type="button" onClick={searchCrates} disabled={crateQuery.length < 2 || busy !== ''} className="rounded bg-cyan-700 px-2 hover:bg-cyan-600 disabled:opacity-35" title={t('lab.search')}><Search className={`h-4 w-4 ${busy === 'search' ? 'animate-spin' : ''}`} /></button>
+            <input
+              value={crateQuery}
+              onChange={(event) => setCrateQuery(event.target.value)}
+              onKeyDown={(event) => event.key === 'Enter' && searchPackages()}
+              placeholder={packageInfo.placeholder}
+              className="min-w-0 flex-1 rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs"
+            />
+            <button
+              type="button"
+              onClick={searchPackages}
+              disabled={crateQuery.length < 2 || busy !== ''}
+              className="rounded bg-cyan-700 px-2 hover:bg-cyan-600 disabled:opacity-35"
+              title={t('lab.search')}
+            >
+              <Search className={`h-4 w-4 ${busy === 'search' ? 'animate-spin' : ''}`} />
+            </button>
           </div>
           <div className="mt-2 min-h-0 flex-1 overflow-auto">
             {crateResults.map((crateItem) => (
               <article key={crateItem.name} className="mb-1.5 rounded border border-slate-800 bg-slate-950/60 p-2">
                 <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0"><div className="truncate font-mono text-xs font-semibold text-cyan-300">{crateItem.name}</div><div className="text-[9px] text-slate-500">v{crateItem.max_version} · {crateItem.downloads.toLocaleString()} downloads</div></div>
-                  <button type="button" onClick={() => addCrate(crateItem)} disabled={!activeProject || busy !== ''} className="flex shrink-0 items-center gap-1 rounded bg-emerald-600/20 px-2 py-1 text-[9px] font-bold text-emerald-300 hover:bg-emerald-600/30 disabled:opacity-35"><PackagePlus className="h-3 w-3" />{t('lab.add')}</button>
+                  <div className="min-w-0">
+                    <div className="truncate font-mono text-xs font-semibold text-cyan-300">{crateItem.name}</div>
+                    <div className="text-[9px] text-slate-500">v{crateItem.max_version} · {crateItem.downloads.toLocaleString()} downloads</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => addPackage(crateItem)}
+                    disabled={!activeProject || busy !== ''}
+                    className="flex shrink-0 items-center gap-1 rounded bg-emerald-600/20 px-2 py-1 text-[9px] font-bold text-emerald-300 hover:bg-emerald-600/30 disabled:opacity-35"
+                  >
+                    <PackagePlus className="h-3 w-3" />{t('lab.add')}
+                  </button>
                 </div>
                 <p className="mt-1 line-clamp-2 text-[10px] leading-relaxed text-slate-400">{crateItem.description}</p>
               </article>

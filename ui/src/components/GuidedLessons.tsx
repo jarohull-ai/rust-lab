@@ -11,10 +11,11 @@ import {
 } from 'lucide-react';
 import { useI18n } from '../i18n';
 import { evaluateLesson, LESSON_IDS, LessonId, nextLesson } from '../lessons';
-import { ExecutionReport, GraphSpec } from '../types';
+import { ExecutionReport, GraphSpec, LanguageTarget } from '../types';
 
 interface GuidedLessonsProps {
   activeLesson: LessonId | null;
+  target?: LanguageTarget;
   graph: GraphSpec;
   executionReport: ExecutionReport | null;
   onStart: (lesson: LessonId) => void;
@@ -38,6 +39,7 @@ function loadCompleted(): LessonId[] {
 
 export const GuidedLessons: React.FC<GuidedLessonsProps> = ({
   activeLesson,
+  target = 'rust',
   graph,
   executionReport,
   onStart,
@@ -53,6 +55,13 @@ export const GuidedLessons: React.FC<GuidedLessonsProps> = ({
   );
   const solved = checks.length > 0 && checks.every(Boolean);
 
+  const getLessonText = (id: LessonId, field: 'title' | 'summary' | 'goal' | 'hint') => {
+    const targetKey = `lesson.${target}.${id}.${field}`;
+    const translated = t(targetKey);
+    if (translated !== targetKey) return translated;
+    return t(`lesson.${id}.${field}`);
+  };
+
   useEffect(() => {
     if (!activeLesson || !solved || completed.includes(activeLesson)) return;
     const next = [...completed, activeLesson];
@@ -64,12 +73,57 @@ export const GuidedLessons: React.FC<GuidedLessonsProps> = ({
   const passedChecks = checks.filter(Boolean).length;
   const progress = checks.length === 0 ? 0 : Math.round((passedChecks / checks.length) * 100);
 
+  const theme = {
+    rust: {
+      accentText: 'text-orange-400',
+      badgeBg: 'bg-orange-500/15 text-orange-300',
+      hoverBorder: 'hover:border-orange-500/50',
+      hoverText: 'group-hover:text-orange-400',
+      progressBar: 'bg-orange-500',
+      tagText: 'text-orange-400',
+    },
+    go: {
+      accentText: 'text-cyan-400',
+      badgeBg: 'bg-cyan-500/15 text-cyan-300',
+      hoverBorder: 'hover:border-cyan-500/50',
+      hoverText: 'group-hover:text-cyan-400',
+      progressBar: 'bg-cyan-500',
+      tagText: 'text-cyan-400',
+    },
+    python: {
+      accentText: 'text-amber-400',
+      badgeBg: 'bg-amber-500/15 text-amber-300',
+      hoverBorder: 'hover:border-amber-500/50',
+      hoverText: 'group-hover:text-amber-400',
+      progressBar: 'bg-amber-500',
+      tagText: 'text-amber-400',
+    },
+    cpp: {
+      accentText: 'text-blue-400',
+      badgeBg: 'bg-blue-500/15 text-blue-300',
+      hoverBorder: 'hover:border-blue-500/50',
+      hoverText: 'group-hover:text-blue-400',
+      progressBar: 'bg-blue-500',
+      tagText: 'text-blue-400',
+    },
+  }[target] || {
+    accentText: 'text-orange-400',
+    badgeBg: 'bg-orange-500/15 text-orange-300',
+    hoverBorder: 'hover:border-orange-500/50',
+    hoverText: 'group-hover:text-orange-400',
+    progressBar: 'bg-orange-500',
+    tagText: 'text-orange-400',
+  };
+
   return (
     <section className="absolute left-4 top-4 z-30 w-80 max-h-[calc(100%-2rem)] overflow-hidden rounded-xl border border-slate-700 bg-slate-900/98 text-slate-200 shadow-2xl backdrop-blur-xl">
       <div className="flex items-center justify-between border-b border-slate-800 bg-slate-950/80 px-3.5 py-2.5">
         <div className="flex items-center gap-2">
-          <GraduationCap className="h-4 w-4 text-orange-400" />
+          <GraduationCap className={`h-4 w-4 ${theme.accentText}`} />
           <span className="text-xs font-semibold tracking-wide">{t('lessons.title')}</span>
+          <span className="rounded bg-slate-800 border border-slate-700 px-1.5 py-0.5 text-[9px] font-mono uppercase text-slate-300">
+            {target}
+          </span>
           <span className="rounded-full bg-slate-800 px-1.5 py-0.5 text-[9px] font-mono text-slate-400">
             {completed.length}/{LESSON_IDS.length}
           </span>
@@ -97,25 +151,25 @@ export const GuidedLessons: React.FC<GuidedLessonsProps> = ({
                   key={lesson}
                   type="button"
                   onClick={() => onStart(lesson)}
-                  className="group w-full rounded-lg border border-slate-800 bg-slate-950/60 p-2.5 text-left transition-colors hover:border-orange-500/50 hover:bg-slate-800/60"
+                  className={`group w-full rounded-lg border border-slate-800 bg-slate-950/60 p-2.5 text-left transition-colors ${theme.hoverBorder} hover:bg-slate-800/60`}
                 >
                   <div className="flex items-start gap-2.5">
                     <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
                       isComplete
                         ? 'bg-emerald-500/20 text-emerald-300'
-                        : 'bg-orange-500/15 text-orange-300'
+                        : theme.badgeBg
                     }`}>
                       {isComplete ? <Check className="h-3.5 w-3.5" /> : index + 1}
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block text-xs font-semibold text-slate-100">
-                        {t(`lesson.${lesson}.title`)}
+                        {getLessonText(lesson, 'title')}
                       </span>
                       <span className="mt-0.5 block text-[10px] leading-relaxed text-slate-400">
-                        {t(`lesson.${lesson}.summary`)}
+                        {getLessonText(lesson, 'summary')}
                       </span>
                     </span>
-                    <ArrowRight className="mt-1 h-3.5 w-3.5 text-slate-600 transition-colors group-hover:text-orange-400" />
+                    <ArrowRight className={`mt-1 h-3.5 w-3.5 text-slate-600 transition-colors ${theme.hoverText}`} />
                   </div>
                 </button>
               );
@@ -125,7 +179,7 @@ export const GuidedLessons: React.FC<GuidedLessonsProps> = ({
           <div className="space-y-3">
             <div>
               <div className="flex items-center justify-between gap-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-orange-400">
+                <span className={`text-[10px] font-bold uppercase tracking-wider ${theme.tagText}`}>
                   {t('lessons.active')}
                 </span>
                 <span className="text-[10px] font-mono text-slate-500">
@@ -133,15 +187,15 @@ export const GuidedLessons: React.FC<GuidedLessonsProps> = ({
                 </span>
               </div>
               <h2 className="mt-1 text-sm font-semibold text-slate-100">
-                {t(`lesson.${activeLesson}.title`)}
+                {getLessonText(activeLesson, 'title')}
               </h2>
               <p className="mt-1 text-[11px] leading-relaxed text-slate-400">
-                {t(`lesson.${activeLesson}.goal`)}
+                {getLessonText(activeLesson, 'goal')}
               </p>
               <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-800">
                 <div
                   className={`h-full rounded-full transition-all duration-300 ${
-                    solved ? 'bg-emerald-500' : 'bg-orange-500'
+                    solved ? 'bg-emerald-500' : theme.progressBar
                   }`}
                   style={{ width: `${progress}%` }}
                 />
@@ -199,7 +253,7 @@ export const GuidedLessons: React.FC<GuidedLessonsProps> = ({
               </div>
             ) : (
               <div className="rounded-lg border border-cyan-900/60 bg-cyan-950/20 p-2 text-[10px] leading-relaxed text-cyan-200/80">
-                {t(`lesson.${activeLesson}.hint`)}
+                {getLessonText(activeLesson, 'hint')}
               </div>
             )}
 
@@ -214,7 +268,7 @@ export const GuidedLessons: React.FC<GuidedLessonsProps> = ({
               <button
                 type="button"
                 onClick={onReset}
-                className="inline-flex items-center gap-1 text-[10px] text-slate-400 transition-colors hover:text-orange-300"
+                className={`inline-flex items-center gap-1 text-[10px] text-slate-400 transition-colors ${theme.hoverText}`}
               >
                 <RotateCcw className="h-3 w-3" />
                 {t('lessons.reset')}

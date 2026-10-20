@@ -648,7 +648,7 @@ export const App: React.FC = () => {
   }, [handleRedo, handleSaveProject, handleUndo]);
 
   const handleStartLesson = useCallback((lesson: LessonId) => {
-    const setup = createLessonSetup(lesson);
+    const setup = createLessonSetup(lesson, languageTarget);
     setNodes(setup.nodes);
     setEdges(setup.edges);
     setExecutionReport(null);
@@ -657,7 +657,7 @@ export const App: React.FC = () => {
     setExportData(null);
     setActiveLesson(lesson);
     setLessonsOpen(true);
-  }, [setEdges, setNodes]);
+  }, [languageTarget, setEdges, setNodes]);
 
   const handleResetLesson = useCallback(() => {
     if (activeLesson) handleStartLesson(activeLesson);
@@ -841,6 +841,8 @@ export const App: React.FC = () => {
     >
       {welcomeOpen && mode === 'graph' && (
         <WelcomeScreen
+          target={languageTarget}
+          onTargetChange={setLanguageTarget}
           onExplore={dismissWelcome}
           onStartLesson={() => {
             dismissWelcome();
@@ -890,7 +892,7 @@ export const App: React.FC = () => {
       {/* Main Workspace */}
       {mode === 'lab' ? (
         <React.Suspense fallback={<div className="flex flex-1 items-center justify-center bg-slate-950 text-sm text-slate-400">{t('lab.loading')}</div>}>
-          <WorkspaceLab />
+          <WorkspaceLab target={languageTarget} />
         </React.Suspense>
       ) : <div className="flex flex-1 overflow-hidden">
         {/* Left Sidebar: Node Palette */}
@@ -901,6 +903,7 @@ export const App: React.FC = () => {
           {lessonsOpen && (
             <GuidedLessons
               activeLesson={activeLesson}
+              target={languageTarget}
               graph={currentGraph}
               executionReport={currentExecutionReport}
               onStart={handleStartLesson}

@@ -27,8 +27,11 @@ export const CodeView: React.FC<CodeViewProps> = ({
   onCompile,
   target = 'rust',
 }) => {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [copied, setCopied] = useState(false);
+
+  const currentLang = exportData?.target || target;
+  const langName = currentLang === 'go' ? 'Go' : currentLang === 'python' ? 'Python' : currentLang === 'cpp' ? 'C++' : 'Rust';
 
   const files = exportData?.files && exportData.files.length > 0
     ? exportData.files
@@ -83,14 +86,16 @@ export const CodeView: React.FC<CodeViewProps> = ({
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-800 bg-slate-950/60">
         <div className="flex items-center gap-2">
           <Code2 className="w-4 h-4 text-cyan-400" />
-          <span className="font-semibold text-xs tracking-wide text-slate-100">{t('code.title')}</span>
+          <span className="font-semibold text-xs tracking-wide text-slate-100">
+            {locale === 'pl' ? `Podgląd kodu ${langName}` : `Live ${langName} Code View`}
+          </span>
           <span className="rounded bg-slate-800 px-1.5 py-0.5 text-[9px] font-mono uppercase text-slate-300 border border-slate-700">
-            {exportData?.target || target}
+            {currentLang}
           </span>
         </div>
 
         <div className="flex items-center gap-1.5">
-          {(exportData?.target === 'rust' || (!exportData?.target && target === 'rust')) && (
+          {(currentLang === 'rust') && (
             <button
               type="button"
               onClick={onCompile}
@@ -99,7 +104,7 @@ export const CodeView: React.FC<CodeViewProps> = ({
               title={t('code.compileTitle')}
             >
               <Hammer className={`h-3 w-3 ${compiling ? 'animate-pulse' : ''}`} />
-              {compiling ? t('code.checking') : t('code.check')}
+              {compiling ? t('code.checking') : (locale === 'pl' ? `Sprawdź ${langName}` : `Check ${langName}`)}
             </button>
           )}
 

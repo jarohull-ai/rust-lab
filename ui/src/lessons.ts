@@ -1,5 +1,5 @@
 import type { Edge, Node } from '@xyflow/react';
-import type { ExecutionReport, GraphSpec } from './types';
+import type { ExecutionReport, GraphSpec, LanguageTarget } from './types';
 
 export const LESSON_IDS = [
   'text_pipeline',
@@ -15,7 +15,12 @@ export interface LessonSetup {
   edges: Edge[];
 }
 
-export function createLessonSetup(lesson: LessonId): LessonSetup {
+export function createLessonSetup(lesson: LessonId, target: LanguageTarget = 'rust'): LessonSetup {
+  let sampleText = '   LEARN RUST BY BUILDING   ';
+  if (target === 'go') sampleText = '   LEARN GO WITH GOROUTINES   ';
+  if (target === 'python') sampleText = '   LEARN PYTHON ASYNC PIPELINES   ';
+  if (target === 'cpp') sampleText = '   LEARN C++20 MODERN PIPELINES   ';
+
   if (lesson === 'text_pipeline') {
     return {
       nodes: [
@@ -25,7 +30,7 @@ export function createLessonSetup(lesson: LessonId): LessonSetup {
           position: { x: 160, y: 180 },
           data: {
             kind: 'text_clean',
-            config: { text: '   LEARN RUST BY BUILDING   ', trim: true, to_lower: true },
+            config: { text: sampleText, trim: true, to_lower: true },
             status: 'idle',
           },
         },
