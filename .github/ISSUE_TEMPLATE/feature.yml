@@ -1,0 +1,38 @@
+name: Feature request
+description: Propose a focused improvement to Rust Lab
+title: "[Feature]: "
+labels: [enhancement, needs-triage]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: User problem
+      description: Who needs this and what is difficult today?
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: Describe success without prescribing an implementation.
+    validations:
+      required: true
+  - type: dropdown
+    id: audience
+    attributes:
+      label: Primary audience
+      options: [Learners, Teachers, Hobbyists, Professional developers, Maintainers]
+    validations:
+      required: true
+  - type: textarea
+    id: safety
+    attributes:
+      label: Safety or privacy considerations
+      description: Mention execution, network, filesystem, credentials, or user data if relevant.
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope check
+      options:
+        - label: This keeps Rust Lab as one coherent product.
+          required: true

@@ -75,6 +75,24 @@ async fn health_endpoint_reports_service_status() {
 }
 
 #[tokio::test]
+async fn lab_capabilities_report_safe_execution_backends() {
+    let router = build_router();
+    let capabilities: api::SandboxCapabilities = get_json(router, "/api/lab/capabilities").await;
+
+    assert_eq!(
+        capabilities.offline_execution_available,
+        capabilities.bubblewrap_ready || capabilities.docker_ready
+    );
+    assert_eq!(
+        capabilities.dependency_fetch_available,
+        capabilities.docker_ready
+    );
+    if let Some(backend) = capabilities.preferred_backend {
+        assert!(matches!(backend.as_str(), "bubblewrap" | "docker"));
+    }
+}
+
+#[tokio::test]
 async fn nodes_endpoint_lists_expected_registry() {
     let router = build_router();
     let specs: Vec<NodeSpec> = get_json(router, "/api/nodes").await;

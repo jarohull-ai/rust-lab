@@ -7,5 +7,7 @@ cd "$rust_lab_root"
 npm --prefix ui ci
 npm --prefix ui test
 npm --prefix ui run build
-cargo test --workspace
-cargo clippy --all-targets --all-features -- -D warnings
+cargo fmt --all -- --check
+cargo test --workspace --locked
+cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+git diff --check

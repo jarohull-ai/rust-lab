@@ -115,6 +115,15 @@ export interface CargoCommandResponse {
   sandbox: string;
 }
 
+export interface SandboxCapabilities {
+  offline_execution_available: boolean;
+  dependency_fetch_available: boolean;
+  cargo_detected: boolean;
+  bubblewrap_ready: boolean;
+  docker_ready: boolean;
+  preferred_backend: 'bubblewrap' | 'docker' | null;
+}
+
 export interface CrateSummary {
   name: string;
   max_version: string;

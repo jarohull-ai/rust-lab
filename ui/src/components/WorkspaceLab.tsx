@@ -6,6 +6,7 @@ import {
   Box,
   Check,
   ChevronRight,
+  CircleAlert,
   FileCode2,
   FileText,
   Folder,
@@ -27,6 +28,7 @@ import {
   CrateSummary,
   LabFile,
   LabProject,
+  SandboxCapabilities,
   WorkspaceEntry,
   WorkspaceTree,
 } from '../types';
@@ -56,14 +58,25 @@ export const WorkspaceLab: React.FC = () => {
   const [output, setOutput] = useState(t('lab.console.empty'));
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
+  const [capabilities, setCapabilities] = useState<SandboxCapabilities | null>();
 
   const dirty = content !== savedContent;
   const sourceFiles = useMemo(() => entries.filter((entry) => entry.kind === 'file'), [entries]);
+  const offlineReady = capabilities?.offline_execution_available === true;
+  const fetchReady = capabilities?.dependency_fetch_available === true;
 
   const refreshProjects = useCallback(async () => {
     const data = await apiJson<LabProject[]>('/api/lab/projects');
     setProjects(data);
     setActiveProject((current) => current ?? data[0] ?? null);
+  }, []);
+
+  const refreshCapabilities = useCallback(async () => {
+    try {
+      setCapabilities(await apiJson<SandboxCapabilities>('/api/lab/capabilities'));
+    } catch {
+      setCapabilities(null);
+    }
   }, []);
 
   const refreshTree = useCallback(async (project: LabProject) => {
@@ -74,7 +87,8 @@ export const WorkspaceLab: React.FC = () => {
 
   useEffect(() => {
     refreshProjects().catch((cause) => setError(cause instanceof Error ? cause.message : String(cause)));
-  }, [refreshProjects]);
+    refreshCapabilities();
+  }, [refreshCapabilities, refreshProjects]);
 
   useEffect(() => {
     if (!activeProject) return;
@@ -286,7 +300,13 @@ export const WorkspaceLab: React.FC = () => {
         <div className="h-52 shrink-0 border-t border-slate-800 bg-slate-950">
           <div className="flex h-9 items-center justify-between border-b border-slate-800 px-3">
             <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400"><TerminalSquare className="h-3.5 w-3.5 text-emerald-400" />{t('lab.console')}</span>
-            <span className="flex items-center gap-1 text-[9px] text-emerald-500"><ShieldCheck className="h-3 w-3" />{t('lab.sandboxed')}</span>
+            {capabilities === undefined ? (
+              <span className="flex items-center gap-1 text-[9px] text-slate-500"><LoaderCircle className="h-3 w-3 animate-spin" />{t('lab.sandboxChecking')}</span>
+            ) : offlineReady ? (
+              <span className="flex items-center gap-1 text-[9px] text-emerald-500"><ShieldCheck className="h-3 w-3" />{t('lab.sandboxReady', { backend: capabilities?.preferred_backend ?? '' })}</span>
+            ) : (
+              <span className="flex items-center gap-1 text-[9px] text-amber-400"><CircleAlert className="h-3 w-3" />{t('lab.sandboxUnavailable')}</span>
+            )}
           </div>
           <pre className="h-[calc(100%-2.25rem)] overflow-auto whitespace-pre-wrap p-3 font-mono text-[11px] leading-relaxed text-slate-300">{error ? `ERROR: ${error}\n\n${output}` : output}</pre>
         </div>
@@ -295,11 +315,35 @@ export const WorkspaceLab: React.FC = () => {
       <aside className="flex w-80 shrink-0 flex-col border-l border-slate-800 bg-slate-900/80">
         <div className="border-b border-slate-800 p-3">
           <div className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-emerald-300"><TerminalSquare className="h-4 w-4" />Cargo</div>
+          <div className={`mb-2 rounded border px-2.5 py-2 text-[10px] leading-relaxed ${
+            capabilities === undefined
+              ? 'border-slate-700 bg-slate-950/60 text-slate-400'
+              : offlineReady
+                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
+                : 'border-amber-500/40 bg-amber-500/10 text-amber-200'
+          }`}>
+            <div className="flex items-start justify-between gap-2">
+              <span className="flex items-start gap-1.5">
+                {capabilities === undefined ? <LoaderCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 animate-spin" /> : offlineReady ? <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" /> : <CircleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />}
+                {capabilities === undefined
+                  ? t('lab.sandboxChecking')
+                  : offlineReady
+                    ? t('lab.sandboxReadyDetail', { backend: capabilities?.preferred_backend ?? '' })
+                    : t('lab.sandboxUnavailableHelp')}
+              </span>
+              {capabilities !== undefined && (
+                <button type="button" onClick={() => { setCapabilities(undefined); refreshCapabilities(); }} className="rounded p-0.5 hover:bg-white/10" title={t('lab.sandboxRetry')}>
+                  <RefreshCw className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+            {capabilities && !fetchReady && <p className="mt-1 border-t border-current/10 pt-1 opacity-80">{t('lab.fetchUnavailable')}</p>}
+          </div>
           <div className="grid grid-cols-3 gap-1.5">
             {([
               ['fetch', PackagePlus], ['check', Check], ['test', TestTube2], ['run', Play], ['clippy', ShieldCheck], ['fmt', WandSparkles],
             ] as const).map(([action, Icon]) => (
-              <button key={action} type="button" onClick={() => runCargo(action)} disabled={!activeProject || busy !== ''} className="flex items-center justify-center gap-1 rounded border border-slate-700 bg-slate-800 px-2 py-2 text-[10px] font-semibold text-slate-200 hover:border-emerald-500/60 hover:bg-slate-700 disabled:opacity-35"><Icon className={`h-3.5 w-3.5 ${busy === action ? 'animate-spin' : ''}`} />{action}</button>
+              <button key={action} type="button" onClick={() => runCargo(action)} disabled={!activeProject || busy !== '' || (action === 'fetch' ? !fetchReady : !offlineReady)} className="flex items-center justify-center gap-1 rounded border border-slate-700 bg-slate-800 px-2 py-2 text-[10px] font-semibold text-slate-200 hover:border-emerald-500/60 hover:bg-slate-700 disabled:opacity-35"><Icon className={`h-3.5 w-3.5 ${busy === action ? 'animate-spin' : ''}`} />{action}</button>
             ))}
             <button type="button" onClick={() => activeProject && refreshTree(activeProject)} disabled={!activeProject || busy !== ''} className="flex items-center justify-center gap-1 rounded border border-slate-700 bg-slate-800 px-2 py-2 text-[10px] font-semibold text-slate-200 hover:bg-slate-700 disabled:opacity-35"><RefreshCw className="h-3.5 w-3.5" />{t('lab.refresh')}</button>
           </div>

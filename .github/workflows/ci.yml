@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "codex/**"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust:
+    name: Rust checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Install stable Rust with quality components
+        run: |
+          rustup toolchain install stable --profile minimal --component rustfmt,clippy
+          rustup default stable
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+      - name: Run tests
+        run: cargo test --workspace --locked
+      - name: Lint with warnings denied
+        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+
+  ui:
+    name: UI checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - name: Install locked dependencies
+        run: npm --prefix ui ci
+      - name: Run UI tests
+        run: npm --prefix ui test
+      - name: Build production UI
+        run: npm --prefix ui run build
+
+  container:
+    name: Container build
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: [rust, ui]
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Build the release container
+        run: docker build --tag rust-lab:ci .

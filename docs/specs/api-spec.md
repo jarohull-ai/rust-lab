@@ -1,8 +1,11 @@
-# API Specification: Graph Description Format v0.2
+# API Specification: Rust Lab v0.3
 
 ## Overview
 This document defines the JSON structure used to describe a Rust Lab graph,
 as accepted by `crates/runtime` (`lab_node_sdk::GraphSpec`).
+
+It also records the local HTTP surface used by the bundled UI. The API is an alpha interface and
+is not a remotely hosted or multi-tenant service contract.
 
 > v0.1.0 of this document described `type`/`params`/`source`/`target` fields that the
 > runtime never implemented. v0.2 documents the format the runtime actually reads.
@@ -77,7 +80,7 @@ Rust Lab enforces strict type checking at validation time to catch wiring errors
 
 > **Fail-Fast Rule**: `file_path` is strictly distinct from `string`. Connecting a generic `string` (e.g. `http_get.body`) to a `file_path` is a validation error. Explicit conversion nodes must be used.
 
-## Node Catalogue (runtime v0.2.0)
+## Node Catalogue (runtime v0.3.0)
 
 | kind | inputs (required*) | outputs | notes |
 |------|--------------------|---------|-------|
@@ -138,3 +141,42 @@ additional domains and directories only through `RUST_LAB_ALLOWED_DOMAINS`,
 
 Default file reads are restricted to `data/` and `examples/`. Default writes are restricted to
 `data/` and `output/`. Absolute paths, home-relative paths, and parent traversal are rejected.
+
+## Local HTTP API
+
+All endpoints are rooted at the Rust Lab origin and accept/return JSON unless noted otherwise.
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/api/health` | API service and version health |
+| `GET` | `/api/nodes` | Registered visual node specifications |
+| `POST` | `/api/validate` | Validate a graph and return its execution order |
+| `POST` | `/api/execute` | Validate and execute a graph under host policy |
+| `POST` | `/api/export` | Generate standalone Cargo project source |
+| `POST` | `/api/compile` | Check generated Rust with offline Cargo |
+| `POST` | `/api/tutor/hints` | Return deterministic educational hints |
+| `GET/POST` | `/api/lab/projects` | List or create local Cargo workspaces |
+| `POST` | `/api/lab/import/github` | Import a public GitHub HTTPS repository |
+| `GET` | `/api/lab/projects/:id/tree` | List supported project files |
+| `GET/PUT` | `/api/lab/file` | Read or update a supported text file |
+| `GET` | `/api/lab/capabilities` | Probe safe Cargo execution backends |
+| `POST` | `/api/lab/cargo` | Run an explicitly approved Cargo action |
+| `GET` | `/api/lab/crates/search` | Search the public crates.io index API |
+| `POST` | `/api/lab/dependencies` | Add an explicitly approved dependency |
+
+### Sandbox capability response
+
+```json
+{
+  "offline_execution_available": true,
+  "dependency_fetch_available": true,
+  "cargo_detected": true,
+  "bubblewrap_ready": true,
+  "docker_ready": true,
+  "preferred_backend": "bubblewrap"
+}
+```
+
+Readiness is actively probed. `dependency_fetch_available` currently requires Docker because Fetch
+is the only Cargo phase allowed network access. The UI must not offer an unavailable action as if it
+were executable.

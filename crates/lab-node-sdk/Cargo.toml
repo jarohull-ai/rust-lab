@@ -2,7 +2,13 @@
 name = "lab-node-sdk"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Internal typed node and graph contracts for Rust Lab"
+publish = false
 
 [dependencies]
 serde.workspace = true
@@ -12,4 +18,3 @@ async-trait = "0.1"
 anyhow.workspace = true
 tokio.workspace = true
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
-

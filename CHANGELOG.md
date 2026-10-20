@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-20
+
+Public alpha candidate; not published to crates.io.
+
 ### Added
 - Official Rust logo on the welcome screen, application toolbar, and browser tab.
 - Portable `.rustlab.json` project files with browser autosave, Open/Save, and project naming.
@@ -13,6 +17,23 @@ All notable changes to this project will be documented in this file.
 - Guided lessons for safe file reading and writing, bringing the course to five lessons.
 - Keyboard-accessible node palette, visible focus styling, and reduced-motion support.
 - Hardened Docker and Compose deployment for a contained local instance.
+- Real Cargo Workspace Lab with local project creation and public GitHub repository import.
+- Source tree and CodeMirror editor for supported Rust project files.
+- Public crates.io search and explicit dependency additions.
+- Confirmed Cargo Fetch followed by offline Check, Test, Run, Clippy, and Fmt commands.
+- Per-project Cargo cache and `trajectory.jsonl` execution records.
+- Runtime sandbox capability endpoint and localized UI readiness indicator.
+- Public-project documentation: contribution guide, support policy, code of conduct, security model,
+  roadmap, release process, and GitHub issue/PR templates.
+- GitHub Actions release gate for Rust, UI, and container builds plus monthly Dependabot updates.
+
+### Changed
+- Product positioning now presents Rust Lab as one Learn, Build, and Experiment environment.
+- Internal workspace crates are explicitly excluded from crates.io publishing until their public
+  API and package identities receive a separate review.
+- License files now consistently provide the declared `MIT OR Apache-2.0` choice.
+- Docker deployment limitations for Cargo Workspace execution are documented explicitly.
+- Local and CI verification now enforce Rust formatting and locked dependencies.
 
 ### Security
 - The API now binds to `127.0.0.1` unless `RUST_LAB_HOST` is explicitly configured.
@@ -20,6 +41,12 @@ All notable changes to this project will be documented in this file.
 - File reads now use an allowlist in addition to sensitive-path denial.
 - Execution has a 30-second timeout and requests have a 1 MiB body limit.
 - Server-side exports are confined to `target/exports/`.
+- Imported code executes only in Bubblewrap or a hardened Docker fallback; Cargo actions are
+  disabled when neither backend is ready.
+- Networked dependency Fetch is separated from offline execution and receives no host Cargo
+  credentials.
+- Public GitHub import is shallow, non-interactive, size-limited, and restricted to HTTPS GitHub
+  repository URLs.
 
 ## [0.2.0] - 2026-10-19
 

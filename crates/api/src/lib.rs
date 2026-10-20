@@ -18,7 +18,8 @@ use tower_http::services::ServeDir;
 mod workspace;
 pub use workspace::{
     CargoAction, CargoCommandRequest, CargoCommandResponse, CrateSearchResponse, DependencyRequest,
-    GitHubImportRequest, LabFile, LabProject, NewProjectRequest, SaveFileRequest, WorkspaceTree,
+    GitHubImportRequest, LabFile, LabProject, NewProjectRequest, SandboxCapabilities,
+    SaveFileRequest, WorkspaceTree,
 };
 
 static COMPILE_SEQUENCE: AtomicU64 = AtomicU64::new(1);

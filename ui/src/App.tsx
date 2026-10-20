@@ -19,7 +19,6 @@ import { ConsoleOutput } from './components/ConsoleOutput';
 import { Toolbar } from './components/Toolbar';
 import { GuidedLessons } from './components/GuidedLessons';
 import { WelcomeScreen } from './components/WelcomeScreen';
-import { WorkspaceLab } from './components/WorkspaceLab';
 import { createLessonSetup, LessonId } from './lessons';
 import {
   AUTOSAVE_KEY,
@@ -30,6 +29,7 @@ import {
   projectToWorkspace,
 } from './project';
 import { createStoredZip } from './zip';
+import { useI18n } from './i18n';
 import {
   GraphSpec,
   NodeSpec,
@@ -39,6 +39,11 @@ import {
   CompileResponse,
   UiLog,
 } from './types';
+
+const WorkspaceLab = React.lazy(async () => {
+  const module = await import('./components/WorkspaceLab');
+  return { default: module.WorkspaceLab };
+});
 
 let idCounter = 1;
 let logCounter = 1;
@@ -105,6 +110,7 @@ function downloadBlob(blob: Blob, fileName: string): void {
 }
 
 export const App: React.FC = () => {
+  const { t } = useI18n();
   const initialWorkspace = useMemo(loadInitialWorkspace, []);
   const [nodes, setNodes, onNodesChange] = useNodesState(initialWorkspace.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialWorkspace.edges);
@@ -849,7 +855,11 @@ export const App: React.FC = () => {
       />
 
       {/* Main Workspace */}
-      {mode === 'lab' ? <WorkspaceLab /> : <div className="flex flex-1 overflow-hidden">
+      {mode === 'lab' ? (
+        <React.Suspense fallback={<div className="flex flex-1 items-center justify-center bg-slate-950 text-sm text-slate-400">{t('lab.loading')}</div>}>
+          <WorkspaceLab />
+        </React.Suspense>
+      ) : <div className="flex flex-1 overflow-hidden">
         {/* Left Sidebar: Node Palette */}
         <Sidebar nodeSpecs={nodeSpecs} onAddNode={addNodeWithKind} />
 

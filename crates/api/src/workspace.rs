@@ -138,6 +138,16 @@ pub struct CargoCommandResponse {
     pub sandbox: String,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SandboxCapabilities {
+    pub offline_execution_available: bool,
+    pub dependency_fetch_available: bool,
+    pub cargo_detected: bool,
+    pub bubblewrap_ready: bool,
+    pub docker_ready: bool,
+    pub preferred_backend: Option<String>,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct CrateSearchQuery {
     pub q: String,
@@ -193,12 +203,113 @@ struct CratesIoCrate {
 pub fn routes(router: Router<AppState>) -> Router<AppState> {
     router
         .route("/api/lab/projects", get(list_projects).post(new_project))
+        .route("/api/lab/capabilities", get(sandbox_capabilities))
         .route("/api/lab/import/github", post(import_github))
         .route("/api/lab/projects/:id/tree", get(project_tree))
         .route("/api/lab/file", get(read_file).put(save_file))
         .route("/api/lab/cargo", post(run_cargo))
         .route("/api/lab/crates/search", get(search_crates))
         .route("/api/lab/dependencies", post(add_dependency))
+}
+
+async fn command_succeeds(mut command: tokio::process::Command) -> bool {
+    command.stdin(Stdio::null()).kill_on_drop(true);
+    matches!(
+        tokio::time::timeout(Duration::from_secs(3), command.output()).await,
+        Ok(Ok(output)) if output.status.success()
+    )
+}
+
+async fn bubblewrap_ready() -> bool {
+    let bwrap = Path::new("/usr/bin/bwrap");
+    let Some((cargo_home, rustup_home)) = local_rust_toolchain() else {
+        return false;
+    };
+    if !bwrap.is_file() {
+        return false;
+    }
+    let mut command = limited_bwrap_command(bwrap);
+    command.args([
+        "--unshare-all",
+        "--die-with-parent",
+        "--new-session",
+        "--clearenv",
+        "--proc",
+        "/proc",
+        "--dev",
+        "/dev",
+        "--tmpfs",
+        "/tmp",
+        "--ro-bind",
+        "/usr",
+        "/usr",
+        "--ro-bind",
+        "/etc",
+        "/etc",
+        "--dir",
+        "/cargo",
+        "--dir",
+        "/rustup",
+        "--setenv",
+        "HOME",
+        "/tmp",
+        "--setenv",
+        "CARGO_HOME",
+        "/cargo",
+        "--setenv",
+        "RUSTUP_HOME",
+        "/rustup",
+        "--setenv",
+        "PATH",
+        "/cargo/bin:/usr/bin:/bin",
+    ]);
+    for system_path in ["/bin", "/lib", "/lib64"] {
+        if Path::new(system_path).exists() {
+            command.args(["--ro-bind", system_path, system_path]);
+        }
+    }
+    command
+        .arg("--ro-bind")
+        .arg(cargo_home.join("bin"))
+        .arg("/cargo/bin")
+        .arg("--ro-bind")
+        .arg(rustup_home)
+        .arg("/rustup")
+        .args(["--", "/cargo/bin/cargo", "--version"]);
+    command_succeeds(command).await
+}
+
+async fn docker_ready() -> bool {
+    let Some(docker) = find_executable("docker") else {
+        return false;
+    };
+    let mut command = tokio::process::Command::new(docker);
+    command
+        .args(["image", "inspect", "rust:bookworm", "--format", "{{.Id}}"])
+        .env("DOCKER_CLI_HINTS", "false");
+    command_succeeds(command).await
+}
+
+async fn sandbox_capabilities() -> Json<SandboxCapabilities> {
+    let cargo_detected = find_executable("cargo").is_some();
+    let (bubblewrap_ready, docker_ready) = tokio::join!(bubblewrap_ready(), docker_ready());
+    let bubblewrap_ready = bubblewrap_ready && cargo_detected;
+    let offline_execution_available = bubblewrap_ready || docker_ready;
+    let preferred_backend = if bubblewrap_ready {
+        Some("bubblewrap".to_string())
+    } else if docker_ready {
+        Some("docker".to_string())
+    } else {
+        None
+    };
+    Json(SandboxCapabilities {
+        offline_execution_available,
+        dependency_fetch_available: docker_ready,
+        cargo_detected,
+        bubblewrap_ready,
+        docker_ready,
+        preferred_backend,
+    })
 }
 
 fn api_error(status: StatusCode, message: impl Into<String>) -> ApiError {
@@ -598,7 +709,7 @@ fn allowed_text_file(path: &Path) -> bool {
         Some("rs" | "toml" | "lock" | "md" | "txt" | "json" | "yaml" | "yml")
     ) || matches!(
         path.file_name().and_then(OsStr::to_str),
-        Some(".gitignore" | "LICENSE")
+        Some(".gitignore" | "LICENSE" | "LICENSE-MIT" | "LICENSE-APACHE" | "COPYING")
     )
 }
 
@@ -724,6 +835,68 @@ fn find_executable(name: &str) -> Option<PathBuf> {
     })
 }
 
+fn local_rust_toolchain() -> Option<(PathBuf, PathBuf)> {
+    let cargo = find_executable("cargo")?.canonicalize().ok()?;
+    let cargo_home = cargo.parent()?.parent()?.to_path_buf();
+    let rustup_home = cargo_home.parent()?.join(".rustup");
+    if cargo_home.join("bin").is_dir() && rustup_home.is_dir() {
+        Some((cargo_home, rustup_home))
+    } else {
+        None
+    }
+}
+
+fn current_user_task_count() -> u64 {
+    let Some(uid) = numeric_identity("-u") else {
+        return 0;
+    };
+    let Ok(entries) = fs::read_dir("/proc") else {
+        return 0;
+    };
+    entries
+        .flatten()
+        .filter(|entry| {
+            entry
+                .file_name()
+                .to_string_lossy()
+                .bytes()
+                .all(|byte| byte.is_ascii_digit())
+        })
+        .filter(|entry| {
+            fs::read_to_string(entry.path().join("status"))
+                .ok()
+                .is_some_and(|status| {
+                    status.lines().any(|line| {
+                        line.strip_prefix("Uid:")
+                            .and_then(|values| values.split_whitespace().next())
+                            == Some(uid.as_str())
+                    })
+                })
+        })
+        .map(|entry| {
+            fs::read_dir(entry.path().join("task"))
+                .map(|tasks| tasks.flatten().count() as u64)
+                .unwrap_or(1)
+        })
+        .sum()
+}
+
+fn limited_bwrap_command(bwrap: &Path) -> tokio::process::Command {
+    let prlimit = Path::new("/usr/bin/prlimit");
+    if prlimit.is_file() {
+        let mut command = tokio::process::Command::new(prlimit);
+        let nproc_limit = current_user_task_count().saturating_add(128).max(128);
+        command
+            .arg("--as=3221225472")
+            .arg(format!("--nproc={nproc_limit}"))
+            .arg("--")
+            .arg(bwrap);
+        command
+    } else {
+        tokio::process::Command::new(bwrap)
+    }
+}
+
 async fn sandboxed_cargo(
     root: &Path,
     cache: &Path,
@@ -731,45 +904,15 @@ async fn sandboxed_cargo(
 ) -> Result<(std::process::Output, &'static str), ApiError> {
     let bwrap = Path::new("/usr/bin/bwrap");
     if !bwrap.is_file() {
-        return Err(api_error(
-            StatusCode::SERVICE_UNAVAILABLE,
-            "Safe Cargo sandbox is unavailable on this system",
-        ));
+        return docker_cargo(root, cache, action.args(), false, false).await;
     }
-    let cargo = find_executable("cargo")
-        .and_then(|path| path.canonicalize().ok())
-        .ok_or_else(|| api_error(StatusCode::SERVICE_UNAVAILABLE, "Cargo is not installed"))?;
-    let cargo_home = cargo.parent().and_then(Path::parent).ok_or_else(|| {
-        api_error(
-            StatusCode::SERVICE_UNAVAILABLE,
-            "Could not locate Cargo home",
-        )
-    })?;
-    let user_root = cargo_home.parent().ok_or_else(|| {
-        api_error(
-            StatusCode::SERVICE_UNAVAILABLE,
-            "Could not locate Rust toolchain",
-        )
-    })?;
-    let rustup_home = user_root.join(".rustup");
-    if !rustup_home.is_dir() {
-        return Err(api_error(
-            StatusCode::SERVICE_UNAVAILABLE,
-            "Rustup toolchain is unavailable",
-        ));
-    }
+    let Some((cargo_home, rustup_home)) = local_rust_toolchain() else {
+        return docker_cargo(root, cache, action.args(), false, false).await;
+    };
     let project_root = root
         .canonicalize()
         .map_err(|err| api_error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?;
-    let prlimit = Path::new("/usr/bin/prlimit");
-    let mut command = if prlimit.is_file() {
-        let mut command = tokio::process::Command::new(prlimit);
-        command.args(["--as=3221225472", "--nproc=128", "--"]);
-        command.arg(bwrap);
-        command
-    } else {
-        tokio::process::Command::new(bwrap)
-    };
+    let mut command = limited_bwrap_command(bwrap);
     command.args([
         "--unshare-all",
         "--die-with-parent",
@@ -829,7 +972,7 @@ async fn sandboxed_cargo(
             .arg(source)
             .arg(format!("/cargo/{cache_name}"));
     }
-    command.arg("--ro-bind").arg(&rustup_home).arg("/rustup");
+    command.arg("--ro-bind").arg(rustup_home).arg("/rustup");
     command.args(["--chdir", "/workspace", "--", "/cargo/bin/cargo"]);
     command
         .args(action.args())
@@ -878,7 +1021,7 @@ async fn docker_cargo(
     let uid = numeric_identity("-u").unwrap_or_else(|| "1000".to_string());
     let gid = numeric_identity("-g").unwrap_or_else(|| "1000".to_string());
     let mut command = tokio::process::Command::new(docker);
-    command.args(["run", "--rm"]);
+    command.args(["run", "--rm", "--pull", "never"]);
     if !network {
         command.args(["--network", "none"]);
     }
