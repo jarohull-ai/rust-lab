@@ -48,10 +48,20 @@ export interface GraphSpec {
   security?: Record<string, unknown>;
 }
 
+export type LanguageTarget = 'rust' | 'go' | 'python' | 'cpp';
+
+export interface GeneratedFile {
+  name: string;
+  path: string;
+  content: string;
+  language: string;
+}
+
 export interface RustLabProject {
   format: 'rust-lab-project';
   version: 1;
   name: string;
+  target?: LanguageTarget;
   graph: GraphSpec;
   layout: Record<string, { x: number; y: number }>;
 }
@@ -69,10 +79,13 @@ export interface ExecutionReport {
 }
 
 export interface ExportResponse {
+  target?: LanguageTarget;
   project_name: string;
-  cargo_toml: string;
-  main_rs: string;
-  nodes_rs: string;
+  primary_file?: string;
+  files?: GeneratedFile[];
+  cargo_toml?: string;
+  main_rs?: string;
+  nodes_rs?: string;
 }
 
 export interface CompileResponse {

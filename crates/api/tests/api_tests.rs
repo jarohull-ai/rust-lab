@@ -194,6 +194,35 @@ async fn export_endpoint_generates_project_source_files() {
 }
 
 #[tokio::test]
+async fn export_endpoint_generates_polyglot_source_files() {
+    let router = build_router();
+    let export_go_req = json!({
+        "project_name": "go_service",
+        "target": "go",
+        "graph": {
+            "graph_version": "0.1",
+            "nodes": [
+                { "id": "cleaner", "kind": "text_clean", "config": { "text": "GoRules", "to_lower": true } },
+                { "id": "logger", "kind": "log_output", "config": {} }
+            ],
+            "edges": [
+                { "from": { "node": "cleaner", "port": "cleaned" }, "to": { "node": "logger", "port": "text" } }
+            ]
+        }
+    });
+
+    let export_res: ExportResponse = post_json(router, "/api/export", export_go_req).await;
+    assert_eq!(export_res.project_name, "go_service");
+    assert_eq!(export_res.target, lab_node_sdk::LanguageTarget::Go);
+    assert_eq!(export_res.primary_file, "main.go");
+    let main_go = export_res.files.iter().find(|f| f.path == "main.go").unwrap();
+    assert!(main_go.content.contains("func main()"));
+    assert!(main_go.content.contains("textClean"));
+    let go_mod = export_res.files.iter().find(|f| f.path == "go.mod").unwrap();
+    assert!(go_mod.content.contains("module go_service"));
+}
+
+#[tokio::test]
 async fn compile_endpoint_checks_generated_rust_offline() {
     let router = build_router();
     let request = json!({

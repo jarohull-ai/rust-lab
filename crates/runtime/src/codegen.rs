@@ -722,6 +722,147 @@ pub fn export_project(graph: &GraphSpec, output_dir: &Path, project_name: &str) 
     Ok(())
 }
 
+/// Generates a complete standalone project for any supported target language (Rust, Go, Python, C++).
+pub fn generate_polyglot_project(
+    graph: &GraphSpec,
+    project_name: &str,
+    target: lab_node_sdk::LanguageTarget,
+) -> Result<lab_node_sdk::GeneratedProject> {
+    use lab_node_sdk::{GeneratedFile, GeneratedProject, LanguageTarget};
+
+    let safe_name = sanitize_ident(project_name);
+    let order = crate::plan::execution_order(graph)?;
+    let used_kinds: HashSet<&str> = graph.nodes.iter().map(|n| n.kind.as_str()).collect();
+    let has_network = used_kinds.contains("http_get");
+
+    match target {
+        LanguageTarget::Rust => {
+            let cargo_toml = generate_cargo_toml(&safe_name, has_network);
+            let nodes_rs = generate_nodes_rs(&used_kinds);
+            let main_rs = generate_main_rs(graph, &order)?;
+
+            Ok(GeneratedProject {
+                target,
+                project_name: safe_name,
+                primary_file: "src/main.rs".to_string(),
+                files: vec![
+                    GeneratedFile {
+                        name: "main.rs".to_string(),
+                        path: "src/main.rs".to_string(),
+                        content: main_rs,
+                        language: "rust".to_string(),
+                    },
+                    GeneratedFile {
+                        name: "nodes.rs".to_string(),
+                        path: "src/nodes.rs".to_string(),
+                        content: nodes_rs,
+                        language: "rust".to_string(),
+                    },
+                    GeneratedFile {
+                        name: "Cargo.toml".to_string(),
+                        path: "Cargo.toml".to_string(),
+                        content: cargo_toml,
+                        language: "toml".to_string(),
+                    },
+                ],
+            })
+        }
+        LanguageTarget::Go => {
+            let go_mod = crate::codegen_go::generate_go_mod(&safe_name);
+            let nodes_go = crate::codegen_go::generate_nodes_go(&used_kinds);
+            let main_go = crate::codegen_go::generate_main_go(graph, &order)?;
+
+            Ok(GeneratedProject {
+                target,
+                project_name: safe_name,
+                primary_file: "main.go".to_string(),
+                files: vec![
+                    GeneratedFile {
+                        name: "main.go".to_string(),
+                        path: "main.go".to_string(),
+                        content: main_go,
+                        language: "go".to_string(),
+                    },
+                    GeneratedFile {
+                        name: "nodes.go".to_string(),
+                        path: "nodes.go".to_string(),
+                        content: nodes_go,
+                        language: "go".to_string(),
+                    },
+                    GeneratedFile {
+                        name: "go.mod".to_string(),
+                        path: "go.mod".to_string(),
+                        content: go_mod,
+                        language: "text".to_string(),
+                    },
+                ],
+            })
+        }
+        LanguageTarget::Python => {
+            let reqs = crate::codegen_python::generate_requirements_txt(has_network);
+            let nodes_py = crate::codegen_python::generate_nodes_py(&used_kinds);
+            let main_py = crate::codegen_python::generate_main_py(graph, &order)?;
+
+            Ok(GeneratedProject {
+                target,
+                project_name: safe_name,
+                primary_file: "main.py".to_string(),
+                files: vec![
+                    GeneratedFile {
+                        name: "main.py".to_string(),
+                        path: "main.py".to_string(),
+                        content: main_py,
+                        language: "python".to_string(),
+                    },
+                    GeneratedFile {
+                        name: "nodes.py".to_string(),
+                        path: "nodes.py".to_string(),
+                        content: nodes_py,
+                        language: "python".to_string(),
+                    },
+                    GeneratedFile {
+                        name: "requirements.txt".to_string(),
+                        path: "requirements.txt".to_string(),
+                        content: reqs,
+                        language: "text".to_string(),
+                    },
+                ],
+            })
+        }
+        LanguageTarget::Cpp => {
+            let cmake = crate::codegen_cpp::generate_cmake_lists(&safe_name);
+            let nodes_hpp = crate::codegen_cpp::generate_nodes_hpp(&used_kinds);
+            let main_cpp = crate::codegen_cpp::generate_main_cpp(graph, &order)?;
+
+            Ok(GeneratedProject {
+                target,
+                project_name: safe_name,
+                primary_file: "src/main.cpp".to_string(),
+                files: vec![
+                    GeneratedFile {
+                        name: "main.cpp".to_string(),
+                        path: "src/main.cpp".to_string(),
+                        content: main_cpp,
+                        language: "cpp".to_string(),
+                    },
+                    GeneratedFile {
+                        name: "nodes.hpp".to_string(),
+                        path: "include/nodes.hpp".to_string(),
+                        content: nodes_hpp,
+                        language: "cpp".to_string(),
+                    },
+                    GeneratedFile {
+                        name: "CMakeLists.txt".to_string(),
+                        path: "CMakeLists.txt".to_string(),
+                        content: cmake,
+                        language: "cmake".to_string(),
+                    },
+                ],
+            })
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -816,5 +957,57 @@ mod tests {
         assert!(main_src.contains("nodes::log_output"));
 
         let _ = std::fs::remove_dir_all(&tmp_dir);
+    }
+
+    #[test]
+    fn exports_polyglot_go_python_cpp() {
+        use lab_node_sdk::LanguageTarget;
+
+        let graph: GraphSpec = serde_json::from_value(json!({
+            "graph_version": "0.1",
+            "nodes": [
+                {"id": "read", "kind": "fs_read", "config": {"path": "data/sample.txt"}},
+                {"id": "clean", "kind": "text_clean", "config": {"to_upper": true}},
+                {"id": "print", "kind": "log_output", "config": {}}
+            ],
+            "edges": [
+                {"from": {"node": "read", "port": "content"}, "to": {"node": "clean", "port": "text"}},
+                {"from": {"node": "clean", "port": "cleaned"}, "to": {"node": "print", "port": "text"}}
+            ]
+        })).unwrap();
+
+        // 1. Go export
+        let go_proj = generate_polyglot_project(&graph, "my_go_app", LanguageTarget::Go).unwrap();
+        assert_eq!(go_proj.target, LanguageTarget::Go);
+        assert_eq!(go_proj.primary_file, "main.go");
+        let go_main = go_proj.files.iter().find(|f| f.path == "main.go").unwrap();
+        assert!(go_main.content.contains("func main()"));
+        assert!(go_main.content.contains("fsRead"));
+        assert!(go_main.content.contains("textClean"));
+        assert!(go_main.content.contains("logOutput"));
+        let go_mod = go_proj.files.iter().find(|f| f.path == "go.mod").unwrap();
+        assert!(go_mod.content.contains("module my_go_app"));
+
+        // 2. Python export
+        let py_proj = generate_polyglot_project(&graph, "my_py_app", LanguageTarget::Python).unwrap();
+        assert_eq!(py_proj.target, LanguageTarget::Python);
+        assert_eq!(py_proj.primary_file, "main.py");
+        let py_main = py_proj.files.iter().find(|f| f.path == "main.py").unwrap();
+        assert!(py_main.content.contains("async def main()"));
+        assert!(py_main.content.contains("nodes.fs_read"));
+        assert!(py_main.content.contains("nodes.text_clean"));
+        assert!(py_main.content.contains("nodes.log_output"));
+
+        // 3. C++ export
+        let cpp_proj = generate_polyglot_project(&graph, "my_cpp_app", LanguageTarget::Cpp).unwrap();
+        assert_eq!(cpp_proj.target, LanguageTarget::Cpp);
+        assert_eq!(cpp_proj.primary_file, "src/main.cpp");
+        let cpp_main = cpp_proj.files.iter().find(|f| f.path == "src/main.cpp").unwrap();
+        assert!(cpp_main.content.contains("int main()"));
+        assert!(cpp_main.content.contains("nodes::fs_read"));
+        assert!(cpp_main.content.contains("nodes::text_clean"));
+        assert!(cpp_main.content.contains("nodes::log_output"));
+        let cmake = cpp_proj.files.iter().find(|f| f.path == "CMakeLists.txt").unwrap();
+        assert!(cmake.content.contains("project(my_cpp_app CXX)"));
     }
 }

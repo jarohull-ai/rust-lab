@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.4.0-alpha.1] - 2026-10-20
+
+Polyglot Engine evolution: multi-language visual-to-code architecture.
+
+### Added
+- Polyglot Architecture supporting multi-language code generation (Rust, Go, Python, C++).
+- Go code generator emitting clean `main.go` and `go.mod` with native error handling and typed flows.
+- Python code generator emitting modern `main.py` with type annotations and `asyncio` pipelines.
+- C++ code generator emitting clean C++20 `main.cpp` and `CMakeLists.txt`.
+- Dynamic UI language switcher supporting Rust, Go, Python, and C++ with official logos.
+- Dynamic syntax highlighter adapting to the active target language in real-time.
+
 ## [0.3.0] - 2026-10-20
 
 Public alpha candidate; not published to crates.io.

@@ -1,5 +1,5 @@
 import type { Edge, Node } from '@xyflow/react';
-import type { EdgeSpec, GraphSpec, NodeInstance, RustLabProject } from './types';
+import type { EdgeSpec, GraphSpec, LanguageTarget, NodeInstance, RustLabProject } from './types';
 
 export const PROJECT_FORMAT = 'rust-lab-project' as const;
 export const PROJECT_VERSION = 1 as const;
@@ -34,6 +34,7 @@ export function createProjectDocument(
   name: string,
   nodes: Node[],
   edges: Edge[],
+  target: LanguageTarget = 'rust',
 ): RustLabProject {
   const nodeIds = new Set(nodes.map((node) => node.id));
   const graphNodes: NodeInstance[] = nodes.map((node) => {
@@ -64,6 +65,7 @@ export function createProjectDocument(
     format: PROJECT_FORMAT,
     version: PROJECT_VERSION,
     name: normalizeProjectName(name),
+    target,
     graph: {
       graph_version: '0.1',
       nodes: graphNodes,

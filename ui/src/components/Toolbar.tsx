@@ -16,12 +16,14 @@ import {
 } from 'lucide-react';
 import { SeedTutorButton } from './SeedTutorButton';
 import { useI18n } from '../i18n';
-import { GraphSpec } from '../types';
+import { GraphSpec, LanguageTarget } from '../types';
 import packageInfo from '../../package.json';
 
 interface ToolbarProps {
   mode: 'graph' | 'lab';
   onModeChange: (mode: 'graph' | 'lab') => void;
+  target?: LanguageTarget;
+  onTargetChange?: (target: LanguageTarget) => void;
   graph: GraphSpec;
   projectName: string;
   onProjectNameChange: (name: string) => void;
@@ -48,6 +50,8 @@ interface ToolbarProps {
 export const Toolbar: React.FC<ToolbarProps> = ({
   mode,
   onModeChange,
+  target = 'rust',
+  onTargetChange,
   graph,
   projectName,
   onProjectNameChange,
@@ -75,6 +79,15 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   const [showProject, setShowProject] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const targets: { id: LanguageTarget; label: string; icon: string; border: string; bg: string; text: string; tagline: string }[] = [
+    { id: 'rust', label: 'RUST LAB', icon: '/rust-logo.svg', border: 'border-orange-500/40', bg: 'bg-orange-500/20', text: 'text-orange-400', tagline: 'The Arduino of Rust' },
+    { id: 'go', label: 'GO LAB', icon: '/go-logo.svg', border: 'border-cyan-500/40', bg: 'bg-cyan-500/20', text: 'text-cyan-400', tagline: 'The Arduino of Go' },
+    { id: 'python', label: 'PYTHON LAB', icon: '/python-logo.svg', border: 'border-yellow-500/40', bg: 'bg-yellow-500/20', text: 'text-yellow-400', tagline: 'The Arduino of Python' },
+    { id: 'cpp', label: 'C++ LAB', icon: '/cpp-logo.svg', border: 'border-blue-500/40', bg: 'bg-blue-500/20', text: 'text-blue-400', tagline: 'The Arduino of C++' },
+  ];
+
+  const activeTargetMeta = targets.find((t) => t.id === target) || targets[0];
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'o') {
@@ -91,21 +104,43 @@ export const Toolbar: React.FC<ToolbarProps> = ({
       {/* Brand */}
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-orange-300/50 bg-orange-400 shadow-sm shadow-orange-500/20">
-            <img src="/rust-logo.svg" alt="" className="h-6 w-6" />
+          <div className={`flex h-8 w-8 items-center justify-center rounded-lg border ${activeTargetMeta.border} ${activeTargetMeta.bg} shadow-sm p-1`}>
+            <img src={activeTargetMeta.icon} alt="" className="h-6 w-6 object-contain" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="font-bold text-sm tracking-wide text-slate-100">RUST LAB</span>
-              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-400 font-semibold border border-orange-500/30">
+              <span className="font-bold text-sm tracking-wide text-slate-100">{activeTargetMeta.label}</span>
+              <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${activeTargetMeta.bg} ${activeTargetMeta.text} font-semibold border ${activeTargetMeta.border}`}>
                 v{packageInfo.version}
               </span>
             </div>
             <span className="text-[10px] text-slate-400 block -mt-0.5 font-mono">
-              {t('toolbar.tagline')}
+              {activeTargetMeta.tagline}
             </span>
           </div>
         </div>
+
+        {/* Language Target Switcher */}
+        {onTargetChange && (
+          <div className="flex items-center rounded-lg border border-slate-700 bg-slate-800/80 p-0.5 text-[10px] font-bold ml-2">
+            {targets.map((tgt) => (
+              <button
+                key={tgt.id}
+                type="button"
+                onClick={() => onTargetChange(tgt.id)}
+                className={`flex items-center gap-1.5 rounded px-2 py-1 transition-colors ${
+                  target === tgt.id
+                    ? `${tgt.bg} ${tgt.text} shadow-sm font-semibold border ${tgt.border}`
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+                title={`Switch to ${tgt.label}`}
+              >
+                <img src={tgt.icon} alt="" className="h-3 w-3 object-contain" />
+                <span>{tgt.id.toUpperCase()}</span>
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* API Status Badge */}
         <div className="flex items-center gap-1.5 ml-4 px-2 py-1 rounded bg-slate-950 border border-slate-800 text-[11px] font-mono">

@@ -8,7 +8,6 @@ use axum::{
 use lab_node_sdk::{GraphSpec, NodeSpec};
 use runtime::{codegen, plan, ExecutionReport, Executor, NodeRegistry, Validator};
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -58,17 +57,25 @@ pub struct ExportRequest {
     pub graph: GraphSpec,
     #[serde(default = "default_project_name")]
     pub project_name: String,
+    #[serde(default)]
+    pub target: Option<lab_node_sdk::LanguageTarget>,
 }
 
 fn default_project_name() -> String {
-    "rust_lab_app".to_string()
+    "polyglot_lab_app".to_string()
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ExportResponse {
+    pub target: lab_node_sdk::LanguageTarget,
     pub project_name: String,
+    pub primary_file: String,
+    pub files: Vec<lab_node_sdk::GeneratedFile>,
+    #[serde(default)]
     pub cargo_toml: String,
+    #[serde(default)]
     pub main_rs: String,
+    #[serde(default)]
     pub nodes_rs: String,
 }
 
@@ -228,42 +235,43 @@ async fn export_handler(
         ));
     }
 
-    let safe_name = codegen::sanitize_ident(&payload.project_name);
-    let used_kinds: HashSet<&str> = payload
-        .graph
-        .nodes
-        .iter()
-        .map(|n| n.kind.as_str())
-        .collect();
-    let has_network = used_kinds.contains("http_get");
-
-    let cargo_toml = codegen::generate_cargo_toml(&safe_name, has_network);
-    let nodes_rs = codegen::generate_nodes_rs(&used_kinds);
-    let order = match plan::execution_order(&payload.graph) {
-        Ok(o) => o,
+    let target = payload.target.unwrap_or(lab_node_sdk::LanguageTarget::Rust);
+    let polyglot_proj = match codegen::generate_polyglot_project(&payload.graph, &payload.project_name, target) {
+        Ok(p) => p,
         Err(e) => {
             return Err((
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {
-                    error: format!("Planning error: {e}"),
-                }),
-            ))
-        }
-    };
-    let main_rs = match codegen::generate_main_rs(&payload.graph, &order) {
-        Ok(m) => m,
-        Err(e) => {
-            return Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
                     error: format!("Codegen error: {e}"),
                 }),
-            ))
+            ));
         }
     };
 
+    let cargo_toml = polyglot_proj
+        .files
+        .iter()
+        .find(|f| f.path == "Cargo.toml")
+        .map(|f| f.content.clone())
+        .unwrap_or_default();
+    let main_rs = polyglot_proj
+        .files
+        .iter()
+        .find(|f| f.path == "src/main.rs")
+        .map(|f| f.content.clone())
+        .unwrap_or_default();
+    let nodes_rs = polyglot_proj
+        .files
+        .iter()
+        .find(|f| f.path == "src/nodes.rs")
+        .map(|f| f.content.clone())
+        .unwrap_or_default();
+
     Ok(Json(ExportResponse {
-        project_name: safe_name,
+        target: polyglot_proj.target,
+        project_name: polyglot_proj.project_name,
+        primary_file: polyglot_proj.primary_file,
+        files: polyglot_proj.files,
         cargo_toml,
         main_rs,
         nodes_rs,
