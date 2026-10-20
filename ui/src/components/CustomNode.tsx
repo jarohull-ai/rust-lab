@@ -1,7 +1,8 @@
 import React, { memo } from 'react';
 import { useI18n } from '../i18n';
 import { Handle, Position } from '@xyflow/react';
-import { NodeSpec, PIN_COLORS, PinType } from '../types';
+import { LanguageTarget, NodeSpec, PIN_COLORS, PinType } from '../types';
+import { getNodeTargetMeta } from '../targetInfo';
 import {
   Globe,
   FileText,
@@ -21,6 +22,7 @@ interface CustomNodeProps {
   id: string;
   data: {
     kind: string;
+    target?: LanguageTarget;
     spec?: NodeSpec;
     config: Record<string, any>;
     status?: 'idle' | 'executed' | 'skipped' | 'error';
@@ -46,7 +48,15 @@ const KIND_ICONS: Record<string, React.ReactNode> = {
 
 export const CustomNode = memo(({ id, data }: CustomNodeProps) => {
   const { t } = useI18n();
-  const { kind, spec, config, status, outputValue, onConfigChange, onDelete } = data;
+  const { kind, target = 'rust', spec, config, status, outputValue, onConfigChange, onDelete } = data;
+  const nodeMeta = getNodeTargetMeta(kind, target);
+
+  const badgeClass = {
+    rust: 'border-orange-500/30 bg-orange-500/10 text-orange-300',
+    go: 'border-cyan-500/30 bg-cyan-500/10 text-cyan-300',
+    python: 'border-amber-500/30 bg-amber-500/10 text-amber-300',
+    cpp: 'border-blue-500/30 bg-blue-500/10 text-blue-300',
+  }[target] || 'border-orange-500/30 bg-orange-500/10 text-orange-300';
 
   const getBorderColor = () => {
     if (status === 'executed') return 'border-emerald-500 shadow-emerald-500/20';
@@ -81,7 +91,12 @@ export const CustomNode = memo(({ id, data }: CustomNodeProps) => {
                 </span>
               )}
             </div>
-            <div className="text-[10px] text-slate-400 font-mono">{kind}</div>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span className="text-[10px] text-slate-400 font-mono">{kind}</span>
+              <span className={`text-[8.5px] font-mono px-1 py-0.2 rounded border ${badgeClass}`} title={nodeMeta.signature}>
+                {nodeMeta.badge}
+              </span>
+            </div>
           </div>
         </div>
 

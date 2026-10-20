@@ -823,12 +823,13 @@ export const App: React.FC = () => {
       ...node,
       data: {
         ...node.data,
+        target: languageTarget,
         spec: specMap.get(node.data.kind as string),
         onConfigChange: handleConfigChange,
         onDelete: handleDeleteNode,
       },
     }));
-  }, [nodes, nodeSpecs, handleConfigChange, handleDeleteNode]);
+  }, [nodes, nodeSpecs, languageTarget, handleConfigChange, handleDeleteNode]);
 
   const currentGraph = buildGraphSpec();
   const currentExecutionReport =
@@ -896,7 +897,7 @@ export const App: React.FC = () => {
         </React.Suspense>
       ) : <div className="flex flex-1 overflow-hidden">
         {/* Left Sidebar: Node Palette */}
-        <Sidebar nodeSpecs={nodeSpecs} onAddNode={addNodeWithKind} />
+        <Sidebar nodeSpecs={nodeSpecs} onAddNode={addNodeWithKind} target={languageTarget} />
 
         {/* Center: Interactive Visual Canvas */}
         <div className="flex-1 flex flex-col h-full relative" onDrop={onDrop} onDragOver={onDragOver}>

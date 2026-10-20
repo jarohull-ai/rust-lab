@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useI18n } from '../i18n';
 import CodeMirror from '@uiw/react-codemirror';
 import { rust } from '@codemirror/lang-rust';
 import { go } from '@codemirror/lang-go';
 import { python } from '@codemirror/lang-python';
 import { cpp } from '@codemirror/lang-cpp';
-import { CompileResponse, ExportResponse, LanguageTarget } from '../types';
+import { CompileResponse, ExportResponse, GeneratedFile, LanguageTarget } from '../types';
 import { Code2, Copy, Check, FileCode, Package, RefreshCw, Hammer, XCircle } from 'lucide-react';
 
 interface CodeViewProps {
@@ -33,15 +33,47 @@ export const CodeView: React.FC<CodeViewProps> = ({
   const currentLang = exportData?.target || target;
   const langName = currentLang === 'go' ? 'Go' : currentLang === 'python' ? 'Python' : currentLang === 'cpp' ? 'C++' : 'Rust';
 
-  const files = exportData?.files && exportData.files.length > 0
+  const defaultFiles: GeneratedFile[] = useMemo(() => {
+    switch (currentLang) {
+      case 'go':
+        return [
+          { name: 'main.go', path: 'main.go', content: '// Go application\npackage main\n\nfunc main() {\n}\n', language: 'go' },
+          { name: 'nodes.go', path: 'nodes.go', content: '// Go nodes\npackage main\n', language: 'go' },
+          { name: 'go.mod', path: 'go.mod', content: 'module polyglot_lab\n\ngo 1.22\n', language: 'text' },
+        ];
+      case 'python':
+        return [
+          { name: 'main.py', path: 'main.py', content: '# Python application\nimport asyncio\n\nasync def main():\n    pass\n', language: 'python' },
+          { name: 'nodes.py', path: 'nodes.py', content: '# Python nodes\n', language: 'python' },
+          { name: 'requirements.txt', path: 'requirements.txt', content: '# Python dependencies\n', language: 'text' },
+        ];
+      case 'cpp':
+        return [
+          { name: 'src/main.cpp', path: 'src/main.cpp', content: '// C++20 application\n#include <iostream>\n\nint main() {\n    return 0;\n}\n', language: 'cpp' },
+          { name: 'include/nodes.hpp', path: 'include/nodes.hpp', content: '// C++20 nodes\n#pragma once\n', language: 'cpp' },
+          { name: 'CMakeLists.txt', path: 'CMakeLists.txt', content: 'cmake_minimum_required(VERSION 3.20)\nproject(polyglot_lab CXX)\nset(CMAKE_CXX_STANDARD 20)\n', language: 'cmake' },
+        ];
+      case 'rust':
+      default:
+        return [
+          { name: 'main.rs', path: 'src/main.rs', content: exportData?.main_rs || '', language: 'rust' },
+          { name: 'nodes.rs', path: 'src/nodes.rs', content: exportData?.nodes_rs || '', language: 'rust' },
+          { name: 'Cargo.toml', path: 'Cargo.toml', content: exportData?.cargo_toml || '', language: 'toml' },
+        ];
+    }
+  }, [currentLang, exportData]);
+
+  const files: GeneratedFile[] = exportData?.files && exportData.files.length > 0
     ? exportData.files
-    : [
-        { name: 'main.rs', path: 'src/main.rs', content: exportData?.main_rs || '', language: 'rust' },
-        { name: 'nodes.rs', path: 'src/nodes.rs', content: exportData?.nodes_rs || '', language: 'rust' },
-        { name: 'Cargo.toml', path: 'Cargo.toml', content: exportData?.cargo_toml || '', language: 'toml' },
-      ];
+    : defaultFiles;
 
   const [activePath, setActivePath] = useState<string>(files[0]?.path || 'src/main.rs');
+
+  useEffect(() => {
+    if (files.length > 0) {
+      setActivePath(files[0].path);
+    }
+  }, [currentLang]);
 
   useEffect(() => {
     if (files.length > 0 && !files.some((f) => f.path === activePath)) {

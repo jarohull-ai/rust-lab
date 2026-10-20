@@ -361,7 +361,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             backgroundColor: 'var(--theme-accent, #ea580c)',
             boxShadow: '0 4px 12px var(--theme-accent-glow, rgba(234, 88, 12, 0.2))',
           }}
-          title={t('toolbar.exportTitle')}
+          title={t(`toolbar.exportTitle.${target}`)}
         >
           <FolderDown className="w-3.5 h-3.5" />
           <span>{isExporting ? t('toolbar.exporting') : t('toolbar.export')}</span>
