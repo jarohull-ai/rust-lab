@@ -1,0 +1,85 @@
+name: Release Desktop App
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release:
+    name: Build (${{ matrix.platform }})
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: 'macos-latest'
+            args: '--target aarch64-apple-darwin'
+          - platform: 'macos-13'
+            args: '--target x86_64-apple-darwin'
+          - platform: 'ubuntu-22.04'
+            args: ''
+          - platform: 'windows-latest'
+            args: ''
+
+    runs-on: ${{ matrix.platform }}
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin' || matrix.platform == 'macos-13' && 'x86_64-apple-darwin' || '' }}
+
+      - name: Install Linux dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libgtk-3-dev
+
+      - name: Install UI dependencies and build web assets
+        run: |
+          npm --prefix ui ci
+          npm --prefix ui run build
+
+      - name: Build Tauri Desktop Application and Create Release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: './src-tauri'
+          tagName: ${{ github.ref_name }}
+          releaseName: 'Polyglot Lab ${{ github.ref_name }}'
+          releaseBody: |
+            ## Polyglot Lab Desktop Installers
+
+            The visual-to-code educational platform supporting **Rust, Go, Python, and C++**.
+
+            ### Downloads:
+            - **Windows**: `.msi` or `.exe` installer (x64)
+            - **macOS**: `.dmg` (Apple Silicon M1/M2/M3 & Intel Mac)
+            - **Linux**: `.AppImage` (portable) or `.deb` (Ubuntu/Debian)
+
+            *No server required. Fully offline-capable.*
+          releaseDraft: false
+          prerelease: false
+          args: ${{ matrix.args }}

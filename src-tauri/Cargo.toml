@@ -1,0 +1,26 @@
+[package]
+name = "polyglot-lab-desktop"
+version = "0.4.0-alpha.1"
+description = "Polyglot Lab Desktop Application"
+authors = ["Rust Lab Contributors"]
+license = "MIT OR Apache-2.0"
+edition = "2021"
+rust-version = "1.85"
+
+[lib]
+name = "polyglot_lab_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.7.3" }
+
+[dependencies]
+api = { path = "../crates/api" }
+axum = "0.7"
+tokio = { version = "1", features = ["full"] }
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+log = "0.4"
+tauri = { version = "2.12.4" }
+tauri-plugin-log = "2"
+libdbus-sys = { version = "0.2", features = ["vendored"] }
