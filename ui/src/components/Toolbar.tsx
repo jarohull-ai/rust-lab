@@ -1,11 +1,16 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Play,
   CheckCircle,
   FolderDown,
-  Trash2,
   BookOpen,
   GraduationCap,
+  ChevronDown,
+  FilePlus2,
+  FolderOpen,
+  Redo2,
+  Save,
+  Undo2,
 } from 'lucide-react';
 import { SeedTutorButton } from './SeedTutorButton';
 import { useI18n } from '../i18n';
@@ -14,10 +19,18 @@ import packageInfo from '../../package.json';
 
 interface ToolbarProps {
   graph: GraphSpec;
+  projectName: string;
+  onProjectNameChange: (name: string) => void;
+  onNewProject: () => void;
+  onOpenProject: (file: File) => void;
+  onSaveProject: () => void;
+  onUndo: () => void;
+  onRedo: () => void;
+  canUndo: boolean;
+  canRedo: boolean;
   onValidate: () => void;
   onExecute: () => void;
-  onExportDisk: () => void;
-  onClear: () => void;
+  onExportCargo: () => void;
   onToggleLessons: () => void;
   onLoadExample: (exampleName: 'condition' | 'text' | 'http') => void;
   onFocusNode?: (nodeId: string) => void;
@@ -30,10 +43,18 @@ interface ToolbarProps {
 
 export const Toolbar: React.FC<ToolbarProps> = ({
   graph,
+  projectName,
+  onProjectNameChange,
+  onNewProject,
+  onOpenProject,
+  onSaveProject,
+  onUndo,
+  onRedo,
+  canUndo,
+  canRedo,
   onValidate,
   onExecute,
-  onExportDisk,
-  onClear,
+  onExportCargo,
   onToggleLessons,
   onLoadExample,
   onFocusNode,
@@ -45,6 +66,19 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 }) => {
   const { locale, setLocale, t } = useI18n();
   const [showExamples, setShowExamples] = useState(false);
+  const [showProject, setShowProject] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'o') {
+        event.preventDefault();
+        fileInputRef.current?.click();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
 
   return (
     <header className="h-14 bg-slate-900 border-b border-slate-800 flex items-center justify-between px-4 select-none z-10">
@@ -78,6 +112,99 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           <span className={apiConnected ? 'text-emerald-400 font-semibold' : 'text-rose-400'}>
             {apiConnected ? t('toolbar.connected') : t('toolbar.disconnected')}
           </span>
+        </div>
+
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setShowProject((open) => !open)}
+            className="flex max-w-44 items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-1.5 text-xs text-slate-200 transition-colors hover:bg-slate-700"
+            title={t('project.menu')}
+          >
+            <span className="truncate font-semibold">{projectName}</span>
+            <ChevronDown className="h-3 w-3 shrink-0 text-slate-400" />
+          </button>
+          {showProject && (
+            <div className="absolute left-0 top-full z-50 mt-1.5 w-64 rounded-lg border border-slate-700 bg-slate-900 p-2 shadow-2xl">
+              <label className="block px-1 text-[9px] font-bold uppercase tracking-wider text-slate-500">
+                {t('project.name')}
+              </label>
+              <input
+                value={projectName}
+                maxLength={80}
+                onChange={(event) => onProjectNameChange(event.target.value)}
+                className="mt-1 w-full rounded-md border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-100 outline-none focus:border-cyan-500"
+              />
+              <div className="mt-2 grid grid-cols-3 gap-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    onNewProject();
+                    setShowProject(false);
+                  }}
+                  className="flex flex-col items-center gap-1 rounded-md px-2 py-2 text-[10px] text-slate-300 hover:bg-slate-800"
+                >
+                  <FilePlus2 className="h-4 w-4 text-cyan-400" />
+                  {t('project.new')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex flex-col items-center gap-1 rounded-md px-2 py-2 text-[10px] text-slate-300 hover:bg-slate-800"
+                >
+                  <FolderOpen className="h-4 w-4 text-yellow-400" />
+                  {t('project.open')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onSaveProject();
+                    setShowProject(false);
+                  }}
+                  className="flex flex-col items-center gap-1 rounded-md px-2 py-2 text-[10px] text-slate-300 hover:bg-slate-800"
+                >
+                  <Save className="h-4 w-4 text-emerald-400" />
+                  {t('project.save')}
+                </button>
+              </div>
+              <p className="mt-1 border-t border-slate-800 px-1 pt-2 text-[9px] text-slate-500">
+                {t('project.autosave')}
+              </p>
+            </div>
+          )}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".rustlab,.json,.rustlab.json,application/json"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) onOpenProject(file);
+              event.target.value = '';
+              setShowProject(false);
+            }}
+          />
+        </div>
+
+        <div className="flex items-center gap-0.5">
+          <button
+            type="button"
+            onClick={onUndo}
+            disabled={!canUndo}
+            title={t('project.undo')}
+            className="rounded-md p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-100 disabled:cursor-not-allowed disabled:opacity-30"
+          >
+            <Undo2 className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={onRedo}
+            disabled={!canRedo}
+            title={t('project.redo')}
+            className="rounded-md p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-100 disabled:cursor-not-allowed disabled:opacity-30"
+          >
+            <Redo2 className="h-3.5 w-3.5" />
+          </button>
         </div>
       </div>
 
@@ -166,24 +293,13 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 
         {/* Export Cargo */}
         <button
-          onClick={onExportDisk}
+          onClick={onExportCargo}
           disabled={isExporting}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-orange-600 hover:bg-orange-500 text-white shadow-lg shadow-orange-600/20 transition-all disabled:opacity-50"
           title={t('toolbar.exportTitle')}
         >
           <FolderDown className="w-3.5 h-3.5" />
           <span>{t('toolbar.export')}</span>
-        </button>
-
-        <div className="h-5 w-px bg-slate-800 mx-1" />
-
-        {/* Clear */}
-        <button
-          onClick={onClear}
-          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20 transition-colors"
-          title={t('toolbar.clearTitle')}
-        >
-          <Trash2 className="w-4 h-4" />
         </button>
 
         <div className="flex items-center rounded-lg border border-slate-700 bg-slate-800 p-0.5 text-[10px] font-bold">

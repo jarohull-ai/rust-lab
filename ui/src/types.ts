@@ -45,6 +45,15 @@ export interface GraphSpec {
   graph_version: string;
   nodes: NodeInstance[];
   edges: EdgeSpec[];
+  security?: Record<string, unknown>;
+}
+
+export interface RustLabProject {
+  format: 'rust-lab-project';
+  version: 1;
+  name: string;
+  graph: GraphSpec;
+  layout: Record<string, { x: number; y: number }>;
 }
 
 export interface ValidateResponse {
@@ -64,6 +73,12 @@ export interface ExportResponse {
   cargo_toml: string;
   main_rs: string;
   nodes_rs: string;
+}
+
+export interface CompileResponse {
+  success: boolean;
+  stdout: string;
+  stderr: string;
 }
 
 export interface UiLog {

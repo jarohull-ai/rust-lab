@@ -1,0 +1,7 @@
+.git
+.github
+target
+ui/dist
+ui/node_modules
+output
+*.rustlab.json

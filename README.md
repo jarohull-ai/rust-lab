@@ -12,9 +12,10 @@ Current local release candidate: **v0.2.0**. It is not published to crates.io.
 - DAG planner with data dependencies, control dependencies, branching, and branch pruning.
 - Strict typed pins with explicit converter nodes.
 - Construction Mode exports a standalone Cargo project.
-- React Flow canvas with a generated Rust code view and execution diagnostics.
+- Project files, browser autosave, Undo/Redo, and downloadable Cargo ZIP archives.
+- React Flow canvas with generated Rust code, execution diagnostics, and real `cargo check` feedback.
 - SEED Tutor provides adaptive, deterministic learning hints without an LLM.
-- Three guided lessons with live completion checks and browser-local progress.
+- Five guided lessons with live completion checks and browser-local progress.
 
 ## Workspace
 
@@ -69,13 +70,24 @@ Resolving the issue marks its concept as learned. Progress stays in the browser'
 
 ## Guided lessons
 
-Open **Lessons** in the toolbar to start one of three exercises:
+Open **Lessons** in the toolbar to start one of five exercises:
 
 1. **Text Pipeline** — connect compatible String ports and run a two-node graph.
 2. **HTTP and JSON** — build an HTTP → JSON → String → Log pipeline.
 3. **Conditions** — perform an explicit Json-to-Boolean conversion and configure control-flow branches.
+4. **Read a File Safely** — convert a String into a typed path and process local file content.
+5. **Write a Result** — connect a safe output path and transformed text to a file writer.
 
 Each lesson starts with an intentionally incomplete graph. Its checklist updates as the learner edits the graph, and the final criterion is awarded only after the current graph executes successfully. Completed lessons are stored locally in the browser.
+
+## Projects and compiler feedback
+
+The project menu supports New, Open, and Save for portable `.rustlab.json` files. Every edit is
+also autosaved in the current browser. Use `Ctrl+Z`/`Ctrl+Y` for graph history and `Ctrl+S` to
+download the current project file.
+
+**Export Cargo** downloads a ZIP containing a complete standalone Rust project. **Check Rust**
+runs `cargo check --offline` against the generated source and shows real compiler diagnostics.
 
 ## Run the application
 
@@ -108,6 +120,32 @@ cd ui
 npm ci
 npm run dev
 ```
+
+Rust Lab listens only on `127.0.0.1` by default. To make a deliberately managed instance
+available on a trusted LAN, set `RUST_LAB_HOST` explicitly.
+
+### Docker
+
+For a contained local deployment:
+
+```bash
+docker compose up --build
+```
+
+The supplied Compose configuration publishes Rust Lab only on `127.0.0.1:3030`, runs as an
+unprivileged user without Linux capabilities, and provides temporary compile/output workspaces.
+
+## Execution safety
+
+- HTTP nodes use a host-controlled domain allowlist.
+- File reads are limited to `data/` and `examples/`; writes are limited to `data/` and `output/`.
+- Graph files cannot relax the host execution policy.
+- API requests are limited to 1 MiB and graph execution is limited to 30 seconds.
+- Server-side project export is restricted to `target/exports/`; browser ZIP export does not write
+  an arbitrary server path.
+
+Administrators can extend the defaults with `RUST_LAB_ALLOWED_DOMAINS`,
+`RUST_LAB_ALLOWED_READ_DIRS`, and `RUST_LAB_ALLOWED_WRITE_DIRS`.
 
 ## Run a graph from the CLI
 

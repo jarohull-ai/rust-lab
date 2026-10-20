@@ -128,3 +128,13 @@ Generates an independent Cargo project with native async Rust code, typed variab
 cargo run -p runtime -- --export <output_dir> <graph.json>
 cd <output_dir> && cargo run
 ```
+
+## Host-controlled execution policy
+
+The runtime treats graph JSON as untrusted input. A graph may still contain the legacy `security`
+field for interchange compatibility, but it cannot extend host allowlists. Administrators configure
+additional domains and directories only through `RUST_LAB_ALLOWED_DOMAINS`,
+`RUST_LAB_ALLOWED_READ_DIRS`, and `RUST_LAB_ALLOWED_WRITE_DIRS`.
+
+Default file reads are restricted to `data/` and `examples/`. Default writes are restricted to
+`data/` and `output/`. Absolute paths, home-relative paths, and parent traversal are rejected.

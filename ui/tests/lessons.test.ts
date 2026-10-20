@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createLessonSetup, evaluateLesson, nextLesson } from '../src/lessons.ts';
+import { createLessonSetup, evaluateLesson, LESSON_IDS, nextLesson } from '../src/lessons.ts';
 import type { ExecutionReport, GraphSpec } from '../src/types.ts';
 
 function graph(nodes: GraphSpec['nodes'], edges: GraphSpec['edges']): GraphSpec {
@@ -8,7 +8,7 @@ function graph(nodes: GraphSpec['nodes'], edges: GraphSpec['edges']): GraphSpec 
 }
 
 test('lesson starters are intentionally incomplete', () => {
-  for (const lesson of ['text_pipeline', 'http_json', 'conditions'] as const) {
+  for (const lesson of LESSON_IDS) {
     const setup = createLessonSetup(lesson);
     const spec = graph(
       setup.nodes.map((node) => ({
@@ -85,8 +85,36 @@ test('condition lesson recognizes explicit conversion and branch execution', () 
   assert.equal(evaluateLesson('conditions', spec, report).every(Boolean), true);
 });
 
-test('lesson order ends after the third lesson', () => {
+test('file write lesson requires both typed inputs and a successful run', () => {
+  const spec = graph(
+    [
+      { id: 'lesson_write_path', kind: 'string_to_path', config: { path: 'output/result.txt' } },
+      { id: 'lesson_write_text', kind: 'text_clean', config: { text: 'hello' } },
+      { id: 'lesson_writer', kind: 'fs_write', config: {} },
+    ],
+    [
+      {
+        from: { node: 'lesson_write_path', port: 'path' },
+        to: { node: 'lesson_writer', port: 'path' },
+      },
+      {
+        from: { node: 'lesson_write_text', port: 'cleaned' },
+        to: { node: 'lesson_writer', port: 'content' },
+      },
+    ],
+  );
+  const report: ExecutionReport = {
+    executed: ['lesson_write_path', 'lesson_write_text', 'lesson_writer'],
+    skipped: [],
+    outputs: {},
+  };
+  assert.equal(evaluateLesson('file_write', spec, report).every(Boolean), true);
+});
+
+test('lesson order ends after the fifth lesson', () => {
   assert.equal(nextLesson('text_pipeline'), 'http_json');
   assert.equal(nextLesson('http_json'), 'conditions');
-  assert.equal(nextLesson('conditions'), null);
+  assert.equal(nextLesson('conditions'), 'file_read');
+  assert.equal(nextLesson('file_read'), 'file_write');
+  assert.equal(nextLesson('file_write'), null);
 });

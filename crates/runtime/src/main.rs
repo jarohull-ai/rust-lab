@@ -61,15 +61,13 @@ async fn main() -> Result<()> {
 
     // 4. Execution
     let mut policy = runtime::ExecutionPolicy::default_safe();
-    if let Some(sec) = &graph.security {
-        if let Ok(extra) = serde_json::from_value::<runtime::ExecutionPolicy>(sec.clone()) {
-            policy.merge_with(&extra);
-        }
-    }
     policy.from_env();
 
     let executor = Executor::new(registry);
-    println!("Starting Rust Lab Runtime v{}...", env!("CARGO_PKG_VERSION"));
+    println!(
+        "Starting Rust Lab Runtime v{}...",
+        env!("CARGO_PKG_VERSION")
+    );
     let report = executor.execute_with_policy(graph, &policy).await?;
     println!(
         "Execution finished successfully! ({} executed, {} skipped)",

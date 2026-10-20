@@ -1,7 +1,13 @@
 import type { Edge, Node } from '@xyflow/react';
 import type { ExecutionReport, GraphSpec } from './types';
 
-export const LESSON_IDS = ['text_pipeline', 'http_json', 'conditions'] as const;
+export const LESSON_IDS = [
+  'text_pipeline',
+  'http_json',
+  'conditions',
+  'file_read',
+  'file_write',
+] as const;
 export type LessonId = (typeof LESSON_IDS)[number];
 
 export interface LessonSetup {
@@ -74,53 +80,123 @@ export function createLessonSetup(lesson: LessonId): LessonSetup {
     };
   }
 
+  if (lesson === 'conditions') {
+    return {
+      nodes: [
+        {
+          id: 'lesson_parse_bool',
+          type: 'custom',
+          position: { x: 80, y: 180 },
+          data: {
+            kind: 'json_parse',
+            config: { json_str: 'true' },
+            status: 'idle',
+          },
+        },
+        {
+          id: 'lesson_to_bool',
+          type: 'custom',
+          position: { x: 390, y: 180 },
+          data: { kind: 'json_to_bool', config: {}, status: 'idle' },
+        },
+        {
+          id: 'lesson_condition',
+          type: 'custom',
+          position: { x: 700, y: 180 },
+          data: {
+            kind: 'condition',
+            config: { true_branch: '', false_branch: '' },
+            status: 'idle',
+          },
+        },
+        {
+          id: 'lesson_true',
+          type: 'custom',
+          position: { x: 1040, y: 70 },
+          data: {
+            kind: 'log_output',
+            config: { text: 'The condition is true.' },
+            status: 'idle',
+          },
+        },
+        {
+          id: 'lesson_false',
+          type: 'custom',
+          position: { x: 1040, y: 310 },
+          data: {
+            kind: 'log_output',
+            config: { text: 'The condition is false.' },
+            status: 'idle',
+          },
+        },
+      ],
+      edges: [],
+    };
+  }
+
+  if (lesson === 'file_read') {
+    return {
+      nodes: [
+        {
+          id: 'lesson_read_path',
+          type: 'custom',
+          position: { x: 60, y: 180 },
+          data: {
+            kind: 'string_to_path',
+            config: { path: 'data/sample.txt' },
+            status: 'idle',
+          },
+        },
+        {
+          id: 'lesson_reader',
+          type: 'custom',
+          position: { x: 370, y: 180 },
+          data: { kind: 'fs_read', config: {}, status: 'idle' },
+        },
+        {
+          id: 'lesson_file_cleaner',
+          type: 'custom',
+          position: { x: 680, y: 180 },
+          data: { kind: 'text_clean', config: { to_upper: true }, status: 'idle' },
+        },
+        {
+          id: 'lesson_file_logger',
+          type: 'custom',
+          position: { x: 990, y: 180 },
+          data: { kind: 'log_output', config: {}, status: 'idle' },
+        },
+      ],
+      edges: [],
+    };
+  }
+
   return {
     nodes: [
       {
-        id: 'lesson_parse_bool',
+        id: 'lesson_write_path',
         type: 'custom',
         position: { x: 80, y: 180 },
         data: {
-          kind: 'json_parse',
-          config: { json_str: 'true' },
+          kind: 'string_to_path',
+          config: { path: 'output/lesson-result.txt' },
           status: 'idle',
         },
       },
       {
-        id: 'lesson_to_bool',
+        id: 'lesson_write_text',
         type: 'custom',
         position: { x: 390, y: 180 },
-        data: { kind: 'json_to_bool', config: {}, status: 'idle' },
-      },
-      {
-        id: 'lesson_condition',
-        type: 'custom',
-        position: { x: 700, y: 180 },
         data: {
-          kind: 'condition',
-          config: { true_branch: '', false_branch: '' },
+          kind: 'text_clean',
+          config: { text: '  MY FIRST RUST LAB FILE  ', trim: true, to_lower: true },
           status: 'idle',
         },
       },
       {
-        id: 'lesson_true',
+        id: 'lesson_writer',
         type: 'custom',
-        position: { x: 1040, y: 70 },
-        data: {
-          kind: 'log_output',
-          config: { text: 'The condition is true.' },
-          status: 'idle',
-        },
-      },
-      {
-        id: 'lesson_false',
-        type: 'custom',
-        position: { x: 1040, y: 310 },
-        data: {
-          kind: 'log_output',
-          config: { text: 'The condition is false.' },
-          status: 'idle',
-        },
+        position: { x: 720, y: 180 },
+        data: { kind: 'fs_write', config: {}, status: 'idle' },
       },
     ],
     edges: [],
@@ -180,6 +256,35 @@ export function evaluateLesson(
         'lesson_convert',
         'lesson_logger',
       ]),
+    ];
+  }
+
+  if (lesson === 'file_read') {
+    return [
+      hasNode(graph, 'lesson_read_path', 'string_to_path') &&
+        hasNode(graph, 'lesson_reader', 'fs_read') &&
+        hasNode(graph, 'lesson_file_cleaner', 'text_clean') &&
+        hasNode(graph, 'lesson_file_logger', 'log_output'),
+      hasEdge(graph, 'lesson_read_path', 'path', 'lesson_reader', 'path'),
+      hasEdge(graph, 'lesson_reader', 'content', 'lesson_file_cleaner', 'text'),
+      hasEdge(graph, 'lesson_file_cleaner', 'cleaned', 'lesson_file_logger', 'text'),
+      executed(report, [
+        'lesson_read_path',
+        'lesson_reader',
+        'lesson_file_cleaner',
+        'lesson_file_logger',
+      ]),
+    ];
+  }
+
+  if (lesson === 'file_write') {
+    return [
+      hasNode(graph, 'lesson_write_path', 'string_to_path') &&
+        hasNode(graph, 'lesson_write_text', 'text_clean') &&
+        hasNode(graph, 'lesson_writer', 'fs_write'),
+      hasEdge(graph, 'lesson_write_path', 'path', 'lesson_writer', 'path'),
+      hasEdge(graph, 'lesson_write_text', 'cleaned', 'lesson_writer', 'content'),
+      executed(report, ['lesson_write_path', 'lesson_write_text', 'lesson_writer']),
     ];
   }
 

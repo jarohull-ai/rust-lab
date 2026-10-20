@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   ReactFlow,
   MiniMap,
@@ -21,17 +21,28 @@ import { GuidedLessons } from './components/GuidedLessons';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { createLessonSetup, LessonId } from './lessons';
 import {
+  AUTOSAVE_KEY,
+  createProjectDocument,
+  normalizeProjectName,
+  parseProjectDocument,
+  projectFileName,
+  projectToWorkspace,
+} from './project';
+import { createStoredZip } from './zip';
+import {
   GraphSpec,
   NodeSpec,
   ValidateResponse,
   ExecutionReport,
   ExportResponse,
+  CompileResponse,
   UiLog,
 } from './types';
 
 let idCounter = 1;
 let logCounter = 1;
 const WELCOME_KEY = 'rust-lab.welcome.0.2.dismissed';
+const MAX_PROJECT_FILE_BYTES = 1_000_000;
 
 const INITIAL_NODES: Node[] = [
   {
@@ -68,9 +79,35 @@ const INITIAL_EDGES: Edge[] = [
   },
 ];
 
+function loadInitialWorkspace(): { name: string; nodes: Node[]; edges: Edge[] } {
+  const fallback = { name: 'Untitled Project', nodes: INITIAL_NODES, edges: INITIAL_EDGES };
+  try {
+    const stored = window.localStorage.getItem(AUTOSAVE_KEY);
+    if (!stored) return fallback;
+    const project = parseProjectDocument(stored);
+    return { name: project.name, ...projectToWorkspace(project) };
+  } catch {
+    window.localStorage.removeItem(AUTOSAVE_KEY);
+    return fallback;
+  }
+}
+
+function downloadBlob(blob: Blob, fileName: string): void {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = fileName;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
 export const App: React.FC = () => {
-  const [nodes, setNodes, onNodesChange] = useNodesState(INITIAL_NODES);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(INITIAL_EDGES);
+  const initialWorkspace = useMemo(loadInitialWorkspace, []);
+  const [nodes, setNodes, onNodesChange] = useNodesState(initialWorkspace.nodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initialWorkspace.edges);
+  const [projectName, setProjectName] = useState(initialWorkspace.name);
 
   const [nodeSpecs, setNodeSpecs] = useState<NodeSpec[]>([]);
   const [apiConnected, setApiConnected] = useState<boolean>(false);
@@ -78,6 +115,7 @@ export const App: React.FC = () => {
   const [executionReport, setExecutionReport] = useState<ExecutionReport | null>(null);
   const [executionRevision, setExecutionRevision] = useState<string | null>(null);
   const [exportData, setExportData] = useState<ExportResponse | null>(null);
+  const [compileReport, setCompileReport] = useState<CompileResponse | null>(null);
   const [logs, setLogs] = useState<UiLog[]>([]);
   const [consoleOpen, setConsoleOpen] = useState<boolean>(true);
   const [lessonsOpen, setLessonsOpen] = useState<boolean>(false);
@@ -90,6 +128,21 @@ export const App: React.FC = () => {
   const [isExecuting, setIsExecuting] = useState<boolean>(false);
   const [isExporting, setIsExporting] = useState<boolean>(false);
   const [isCodeLoading, setIsCodeLoading] = useState<boolean>(false);
+  const [isCompiling, setIsCompiling] = useState<boolean>(false);
+
+  const projectDocument = useMemo(
+    () => createProjectDocument(projectName, nodes, edges),
+    [edges, nodes, projectName],
+  );
+  const projectRevision = useMemo(() => JSON.stringify(projectDocument), [projectDocument]);
+  const historyRef = useRef({
+    current: projectRevision,
+    past: [] as string[],
+    future: [] as string[],
+    pending: null as string | null,
+  });
+  const historyTimerRef = useRef<number | null>(null);
+  const [historyVersion, setHistoryVersion] = useState(0);
 
   const appendLog = useCallback(
     (key: string, params: Record<string, string | number> = {}, icon = '') => {
@@ -99,6 +152,106 @@ export const App: React.FC = () => {
       ]);
     },
     []
+  );
+
+  const clearRuntimeState = useCallback(() => {
+    setExecutionReport(null);
+    setExecutionRevision(null);
+    setValidationReport(null);
+    setExportData(null);
+    setCompileReport(null);
+  }, []);
+
+  const setWorkspaceFromProject = useCallback(
+    (project: ReturnType<typeof parseProjectDocument>) => {
+      const workspace = projectToWorkspace(project);
+      setProjectName(project.name);
+      setNodes(workspace.nodes);
+      setEdges(workspace.edges);
+      setActiveLesson(null);
+      clearRuntimeState();
+    },
+    [clearRuntimeState, setEdges, setNodes],
+  );
+
+  const resetHistory = useCallback((revision: string) => {
+    if (historyTimerRef.current !== null) window.clearTimeout(historyTimerRef.current);
+    historyRef.current = { current: revision, past: [], future: [], pending: null };
+    setHistoryVersion((version) => version + 1);
+  }, []);
+
+  const commitPendingHistory = useCallback(() => {
+    const history = historyRef.current;
+    if (!history.pending || history.pending === history.current) return;
+    history.past.push(history.current);
+    if (history.past.length > 100) history.past.shift();
+    history.current = history.pending;
+    history.pending = null;
+    history.future = [];
+    setHistoryVersion((version) => version + 1);
+  }, []);
+
+  useEffect(() => {
+    if (projectRevision === historyRef.current.current) return;
+    historyRef.current.pending = projectRevision;
+    if (historyTimerRef.current !== null) window.clearTimeout(historyTimerRef.current);
+    historyTimerRef.current = window.setTimeout(() => {
+      historyTimerRef.current = null;
+      commitPendingHistory();
+    }, 300);
+    return () => {
+      if (historyTimerRef.current !== null) window.clearTimeout(historyTimerRef.current);
+    };
+  }, [commitPendingHistory, projectRevision]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      window.localStorage.setItem(AUTOSAVE_KEY, projectRevision);
+    }, 500);
+    return () => window.clearTimeout(timer);
+  }, [projectRevision]);
+
+  const restoreHistoryRevision = useCallback(
+    (revision: string) => {
+      const project = parseProjectDocument(revision);
+      setWorkspaceFromProject(project);
+    },
+    [setWorkspaceFromProject],
+  );
+
+  const handleUndo = useCallback(() => {
+    if (historyTimerRef.current !== null) window.clearTimeout(historyTimerRef.current);
+    commitPendingHistory();
+    const history = historyRef.current;
+    const previous = history.past.pop();
+    if (!previous) return;
+    history.future.push(history.current);
+    history.current = previous;
+    history.pending = null;
+    restoreHistoryRevision(previous);
+    setHistoryVersion((version) => version + 1);
+  }, [commitPendingHistory, restoreHistoryRevision]);
+
+  const handleRedo = useCallback(() => {
+    if (historyTimerRef.current !== null) window.clearTimeout(historyTimerRef.current);
+    commitPendingHistory();
+    const history = historyRef.current;
+    const next = history.future.pop();
+    if (!next) return;
+    history.past.push(history.current);
+    history.current = next;
+    history.pending = null;
+    restoreHistoryRevision(next);
+    setHistoryVersion((version) => version + 1);
+  }, [commitPendingHistory, restoreHistoryRevision]);
+
+  const canUndo = useMemo(
+    () => historyRef.current.past.length > 0 || historyRef.current.pending !== null,
+    [historyVersion, projectRevision],
+  );
+  const canRedo = useMemo(
+    () => historyRef.current.future.length > 0,
+    [historyVersion],
   );
 
   // 1. Fetch available nodes and test API connection
@@ -124,23 +277,7 @@ export const App: React.FC = () => {
   }, [fetchSpecs]);
 
   // 2. Helper to build GraphSpec from current ReactFlow nodes & edges
-  const buildGraphSpec = useCallback((): GraphSpec => {
-    const activeNodeIds = new Set(nodes.map((n) => n.id));
-    return {
-      graph_version: '0.1',
-      nodes: nodes.map((n) => ({
-        id: n.id,
-        kind: n.data.kind as string,
-        config: (n.data.config as Record<string, any>) || {},
-      })),
-      edges: edges
-        .filter((e) => activeNodeIds.has(e.source) && activeNodeIds.has(e.target) && e.sourceHandle && e.targetHandle)
-        .map((e) => ({
-          from: { node: e.source, port: e.sourceHandle as string },
-          to: { node: e.target, port: e.targetHandle as string },
-        })),
-    };
-  }, [nodes, edges]);
+  const buildGraphSpec = useCallback((): GraphSpec => projectDocument.graph, [projectDocument]);
 
   const graphRevision = useMemo(() => JSON.stringify(buildGraphSpec()), [buildGraphSpec]);
 
@@ -148,6 +285,7 @@ export const App: React.FC = () => {
     setExecutionReport(null);
     setExecutionRevision(null);
     setValidationReport(null);
+    setCompileReport(null);
   }, [graphRevision]);
 
   // 3. Debounced Live Code Compilation from API
@@ -177,6 +315,32 @@ export const App: React.FC = () => {
     }, 400);
     return () => clearTimeout(timer);
   }, [refreshCode]);
+
+  const handleCompile = useCallback(async () => {
+    setIsCompiling(true);
+    setCompileReport(null);
+    try {
+      const response = await fetch('/api/compile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ graph: buildGraphSpec(), project_name: projectName }),
+      });
+      if (response.ok) {
+        setCompileReport(await response.json() as CompileResponse);
+      } else {
+        const error = await response.json() as { error?: string };
+        setCompileReport({ success: false, stdout: '', stderr: error.error ?? 'Compile failed.' });
+      }
+    } catch (error) {
+      setCompileReport({
+        success: false,
+        stdout: '',
+        stderr: error instanceof Error ? error.message : 'Compile request failed.',
+      });
+    } finally {
+      setIsCompiling(false);
+    }
+  }, [buildGraphSpec, projectName]);
 
   // 4. Update Node Configuration
   const handleConfigChange = useCallback((nodeId: string, key: string, value: any) => {
@@ -356,27 +520,72 @@ export const App: React.FC = () => {
     }
   };
 
-  // 10. Export to Disk
-  const handleExportDisk = async () => {
+  const handleNewProject = useCallback(() => {
+    const project = createProjectDocument('Untitled Project', [], []);
+    setWorkspaceFromProject(project);
+    resetHistory(JSON.stringify(project));
+    appendLog('log.projectCreated', {}, '📄');
+  }, [appendLog, resetHistory, setWorkspaceFromProject]);
+
+  const handleOpenProject = useCallback(async (file: File) => {
+    try {
+      if (file.size > MAX_PROJECT_FILE_BYTES) throw new Error('project-too-large');
+      const project = parseProjectDocument(await file.text());
+      const workspace = projectToWorkspace(project);
+      const normalized = createProjectDocument(project.name, workspace.nodes, workspace.edges);
+      setWorkspaceFromProject(normalized);
+      resetHistory(JSON.stringify(normalized));
+      window.localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(normalized));
+      appendLog('log.projectOpened', { name: normalized.name }, '📂');
+    } catch {
+      appendLog('log.projectOpenFailed', {}, '❌');
+    }
+  }, [appendLog, resetHistory, setWorkspaceFromProject]);
+
+  const handleSaveProject = useCallback(() => {
+    const normalizedName = normalizeProjectName(projectName);
+    const project = createProjectDocument(normalizedName, nodes, edges);
+    setProjectName(normalizedName);
+    downloadBlob(
+      new Blob([`${JSON.stringify(project, null, 2)}\n`], { type: 'application/json' }),
+      projectFileName(normalizedName),
+    );
+    appendLog('log.projectSaved', { name: normalizedName }, '💾');
+  }, [appendLog, edges, nodes, projectName]);
+
+  // 10. Download a complete standalone Cargo project.
+  const handleExportCargo = async () => {
     setIsExporting(true);
     setConsoleOpen(true);
     try {
       const graph = buildGraphSpec();
-      const targetDir = 'target/exported-visual-app';
-      const res = await fetch('/api/export/disk', {
+      const res = await fetch('/api/export', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           graph,
-          project_name: 'exported_visual_app',
-          output_dir: targetDir,
+          project_name: projectName,
         }),
       });
 
       if (res.ok) {
-        const data = await res.json();
-        appendLog('log.exported', { path: data.output_dir }, '🎉');
-        appendLog('log.runExport', { path: data.output_dir }, '👉');
+        const data: ExportResponse = await res.json();
+        const root = data.project_name;
+        const archive = createStoredZip({
+          [`${root}/Cargo.toml`]: data.cargo_toml,
+          [`${root}/src/main.rs`]: data.main_rs,
+          [`${root}/src/nodes.rs`]: data.nodes_rs,
+          [`${root}/README.md`]: `# ${projectName}\n\nGenerated by Rust Lab.\n\n\`\`\`bash\ncargo run\n\`\`\`\n`,
+        });
+        const archiveBuffer = archive.buffer.slice(
+          archive.byteOffset,
+          archive.byteOffset + archive.byteLength,
+        ) as ArrayBuffer;
+        downloadBlob(
+          new Blob([archiveBuffer], { type: 'application/zip' }),
+          `${root}.zip`,
+        );
+        appendLog('log.exportDownloaded', { file: `${root}.zip` }, '🎉');
       } else {
         const errJson = await res.json();
         appendLog('log.exportFailed', { message: errJson.error }, '❌');
@@ -388,16 +597,28 @@ export const App: React.FC = () => {
     }
   };
 
-  // 11. Clear Canvas
-  const handleClear = () => {
-    setNodes([]);
-    setEdges([]);
-    setExecutionReport(null);
-    setExecutionRevision(null);
-    setValidationReport(null);
-    setExportData(null);
-    appendLog('log.canvasCleared', {}, '🧹');
-  };
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey)) return;
+      const target = event.target as HTMLElement | null;
+      const editingText =
+        target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA' || target?.isContentEditable;
+
+      if (event.key.toLowerCase() === 's') {
+        event.preventDefault();
+        handleSaveProject();
+      } else if (!editingText && event.key.toLowerCase() === 'z') {
+        event.preventDefault();
+        if (event.shiftKey) handleRedo();
+        else handleUndo();
+      } else if (!editingText && event.key.toLowerCase() === 'y') {
+        event.preventDefault();
+        handleRedo();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [handleRedo, handleSaveProject, handleUndo]);
 
   const handleStartLesson = useCallback((lesson: LessonId) => {
     const setup = createLessonSetup(lesson);
@@ -601,10 +822,18 @@ export const App: React.FC = () => {
       {/* Top Navigation & Actions */}
       <Toolbar
         graph={currentGraph}
+        projectName={projectName}
+        onProjectNameChange={setProjectName}
+        onNewProject={handleNewProject}
+        onOpenProject={handleOpenProject}
+        onSaveProject={handleSaveProject}
+        onUndo={handleUndo}
+        onRedo={handleRedo}
+        canUndo={canUndo}
+        canRedo={canRedo}
         onValidate={handleValidate}
         onExecute={handleExecute}
-        onExportDisk={handleExportDisk}
-        onClear={handleClear}
+        onExportCargo={handleExportCargo}
         onToggleLessons={() => setLessonsOpen((open) => !open)}
         onLoadExample={handleLoadExample}
         onFocusNode={handleFocusNode}
@@ -667,7 +896,14 @@ export const App: React.FC = () => {
         </div>
 
         {/* Right Pane: Live Generated Rust Code */}
-        <CodeView exportData={exportData} loading={isCodeLoading} onRefresh={refreshCode} />
+        <CodeView
+          exportData={exportData}
+          compileReport={compileReport}
+          loading={isCodeLoading}
+          compiling={isCompiling}
+          onRefresh={refreshCode}
+          onCompile={handleCompile}
+        />
       </div>
     </div>
   );

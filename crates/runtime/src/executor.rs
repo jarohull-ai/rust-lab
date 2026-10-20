@@ -29,13 +29,6 @@ impl Executor {
 
     pub async fn execute(&self, graph: GraphSpec) -> Result<ExecutionReport> {
         let mut policy = crate::execution_policy::ExecutionPolicy::default_safe();
-        if let Some(security) = &graph.security {
-            if let Ok(extra) =
-                serde_json::from_value::<crate::execution_policy::ExecutionPolicy>(security.clone())
-            {
-                policy.merge_with(&extra);
-            }
-        }
         policy.from_env();
         self.execute_with_policy(graph, &policy).await
     }
@@ -348,7 +341,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn execution_policy_rejects_denied_read_path_fs_read() {
+    async fn execution_policy_rejects_absolute_path_fs_read() {
         let g = graph(json!({
             "graph_version": "0.1",
             "nodes": [
@@ -358,11 +351,11 @@ mod tests {
         }));
         let err = executor().execute(g).await.unwrap_err().to_string();
         assert!(err.contains("Execution policy denied"), "{err}");
-        assert!(err.contains("fs_read.path_denylist"), "{err}");
+        assert!(err.contains("fs_read.absolute_path"), "{err}");
     }
 
     #[tokio::test]
-    async fn execution_policy_allows_extended_domain_from_graph_security() {
+    async fn execution_policy_ignores_domain_extensions_from_untrusted_graphs() {
         let g = graph(json!({
             "graph_version": "0.1",
             "security": {
@@ -373,11 +366,10 @@ mod tests {
             ],
             "edges": []
         }));
-        // The host will not resolve in the test environment, so only check policy acceptance.
         let err = executor().execute(g).await.unwrap_err().to_string();
         assert!(
-            !err.contains("Execution policy denied"),
-            "The execution policy should allow the configured domain: {err}"
+            err.contains("http_get.domain_allowlist"),
+            "Graph content must not relax the host execution policy: {err}"
         );
     }
 }

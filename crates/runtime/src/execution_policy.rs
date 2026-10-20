@@ -43,6 +43,9 @@ pub struct ExecutionPolicy {
     /// Directory allowlist for `fs_write` (defaults to `data/` and `output/`).
     #[serde(default)]
     pub allowed_write_dirs: Vec<String>,
+    /// Directory allowlist for `fs_read` (defaults to local learning content).
+    #[serde(default)]
+    pub allowed_read_dirs: Vec<String>,
     /// Path denylist for `fs_read`.
     #[serde(default)]
     pub denied_read_paths: Vec<String>,
@@ -64,10 +67,9 @@ impl ExecutionPolicy {
                 "hnrss.org".into(),
                 "jsonplaceholder.typicode.com".into(),
                 "raw.githubusercontent.com".into(),
-                "localhost".into(),
-                "127.0.0.1".into(),
             ],
             allowed_write_dirs: vec!["data/".into(), "output/".into()],
+            allowed_read_dirs: vec!["data/".into(), "examples/".into()],
             denied_read_paths: vec![
                 "/etc".into(),
                 "/root".into(),
@@ -90,6 +92,11 @@ impl ExecutionPolicy {
                 self.allowed_write_dirs.push(dir.clone());
             }
         }
+        for dir in &extra.allowed_read_dirs {
+            if !self.allowed_read_dirs.contains(dir) {
+                self.allowed_read_dirs.push(dir.clone());
+            }
+        }
         for path in &extra.denied_read_paths {
             if !self.denied_read_paths.contains(path) {
                 self.denied_read_paths.push(path.clone());
@@ -104,6 +111,28 @@ impl ExecutionPolicy {
                 let d = domain.trim();
                 if !d.is_empty() && !self.allowed_domains.contains(&d.to_string()) {
                     self.allowed_domains.push(d.into());
+                }
+            }
+        }
+        if let Ok(extra) = std::env::var("RUST_LAB_ALLOWED_READ_DIRS") {
+            for dir in extra
+                .split(',')
+                .map(str::trim)
+                .filter(|dir| !dir.is_empty())
+            {
+                if !self.allowed_read_dirs.iter().any(|allowed| allowed == dir) {
+                    self.allowed_read_dirs.push(dir.into());
+                }
+            }
+        }
+        if let Ok(extra) = std::env::var("RUST_LAB_ALLOWED_WRITE_DIRS") {
+            for dir in extra
+                .split(',')
+                .map(str::trim)
+                .filter(|dir| !dir.is_empty())
+            {
+                if !self.allowed_write_dirs.iter().any(|allowed| allowed == dir) {
+                    self.allowed_write_dirs.push(dir.into());
                 }
             }
         }
@@ -217,13 +246,34 @@ fn evaluate_fs_read(params: &HashMap<String, Value>, policy: &ExecutionPolicy) -
         None => return PolicyVerdict::Allowed,
     };
 
+    if path.starts_with('/') || path.starts_with('~') || path.contains("..") {
+        return PolicyVerdict::Denied {
+            reason: format!("Absolute path or traversal '{path}' is not allowed"),
+            rule: "fs_read.absolute_path".into(),
+        };
+    }
+
     if policy.denied_read_paths.iter().any(|d| path.contains(d)) {
-        PolicyVerdict::Denied {
+        return PolicyVerdict::Denied {
             reason: format!("Path '{path}' contains denied pattern"),
             rule: "fs_read.path_denylist".into(),
-        }
-    } else {
+        };
+    }
+
+    let normalized = path.trim_start_matches("./");
+    if policy.allowed_read_dirs.iter().any(|directory| {
+        let allowed = directory.trim_start_matches("./");
+        normalized.starts_with(allowed)
+    }) {
         PolicyVerdict::Allowed
+    } else {
+        PolicyVerdict::Denied {
+            reason: format!(
+                "Path '{path}' is not in allowed read dirs: {:?}",
+                policy.allowed_read_dirs
+            ),
+            rule: "fs_read.dir_allowlist".into(),
+        }
     }
 }
 
@@ -298,7 +348,24 @@ mod tests {
         let v = evaluate_node("fs_read", &json!({"path": "/etc/passwd"}), &p);
         assert!(v.is_denied(), "expected denied, got {:?}", v);
         if let PolicyVerdict::Denied { rule, .. } = v {
-            assert_eq!(rule, "fs_read.path_denylist");
+            assert_eq!(rule, "fs_read.absolute_path");
+        }
+    }
+
+    #[test]
+    fn allows_fs_read_from_data_dir() {
+        let p = policy();
+        let v = evaluate_node("fs_read", &json!({"path": "data/input.txt"}), &p);
+        assert_eq!(v, PolicyVerdict::Allowed);
+    }
+
+    #[test]
+    fn rejects_fs_read_outside_allowed_dirs() {
+        let p = policy();
+        let v = evaluate_node("fs_read", &json!({"path": "notes/private.txt"}), &p);
+        assert!(v.is_denied(), "expected denied, got {:?}", v);
+        if let PolicyVerdict::Denied { rule, .. } = v {
+            assert_eq!(rule, "fs_read.dir_allowlist");
         }
     }
 

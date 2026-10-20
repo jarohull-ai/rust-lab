@@ -81,12 +81,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ nodeSpecs, onAddNode }) => {
               </span>
               <div className="space-y-1.5">
                 {nodesInCat.map((spec) => (
-                  <div
+                  <button
                     key={spec.name}
+                    type="button"
                     draggable
                     onDragStart={(e) => onDragStart(e, spec.name)}
                     onClick={() => onAddNode(spec.name)}
-                    className="group flex items-start gap-2.5 p-2.5 rounded-lg bg-slate-950/60 border border-slate-800/80 hover:border-slate-700 hover:bg-slate-800/40 cursor-grab active:cursor-grabbing transition-all duration-150"
+                    aria-label={t('sidebar.addNode', { name: spec.name })}
+                    className="group flex w-full items-start gap-2.5 p-2.5 text-left rounded-lg bg-slate-950/60 border border-slate-800/80 hover:border-slate-700 hover:bg-slate-800/40 cursor-grab active:cursor-grabbing transition-all duration-150"
                   >
                     <div className="p-1.5 rounded-md bg-slate-900 border border-slate-800 mt-0.5 group-hover:scale-105 transition-transform">
                       {KIND_ICONS[spec.name] || <Terminal className="w-3.5 h-3.5 text-slate-400" />}
@@ -96,13 +98,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ nodeSpecs, onAddNode }) => {
                         <span className="font-mono text-xs font-semibold text-slate-200 group-hover:text-cyan-400 transition-colors">
                           {spec.name}
                         </span>
-                        <button
-                          type="button"
+                        <span
                           className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-slate-700 text-slate-400 hover:text-slate-100 transition-opacity"
                           title={t('sidebar.add')}
                         >
                           <Plus className="w-3 h-3" />
-                        </button>
+                        </span>
                       </div>
                       <p className="text-[11px] text-slate-400 line-clamp-1 mt-0.5">
                         {t(`node.${spec.name}.description`)}
@@ -136,7 +137,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ nodeSpecs, onAddNode }) => {
                         })}
                       </div>
                     </div>
-                  </div>
+                  </button>
                 ))}
               </div>
             </div>

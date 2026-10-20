@@ -20,7 +20,57 @@ pub fn sanitize_ident(s: &str) -> String {
     if ident.is_empty() {
         ident.push('_');
     }
+    if matches!(
+        ident.as_str(),
+        "as" | "break"
+            | "const"
+            | "continue"
+            | "crate"
+            | "else"
+            | "enum"
+            | "extern"
+            | "false"
+            | "fn"
+            | "for"
+            | "if"
+            | "impl"
+            | "in"
+            | "let"
+            | "loop"
+            | "match"
+            | "mod"
+            | "move"
+            | "mut"
+            | "pub"
+            | "ref"
+            | "return"
+            | "self"
+            | "Self"
+            | "static"
+            | "struct"
+            | "super"
+            | "trait"
+            | "true"
+            | "type"
+            | "unsafe"
+            | "use"
+            | "where"
+            | "while"
+            | "async"
+            | "await"
+            | "dyn"
+    ) {
+        ident.insert(0, '_');
+    }
     ident
+}
+
+fn rust_string_literal(value: &str) -> String {
+    format!("{value:?}")
+}
+
+fn rust_comment(value: &str) -> String {
+    value.replace(['\r', '\n'], " ")
 }
 
 /// Computes reachable nodes from a starting node ID following data edges, condition branches, and `after` lists.
@@ -321,7 +371,8 @@ fn generate_node_call(
     let mut out = String::new();
     out.push_str(&format!(
         "{indent}// 🚀 Node: '{}' [{}]\n",
-        node.id, node.kind
+        rust_comment(&node.id),
+        rust_comment(&node.kind)
     ));
 
     match node.kind.as_str() {
@@ -334,7 +385,7 @@ fn generate_node_call(
                     .get("url")
                     .and_then(|v| v.as_str())
                     .unwrap_or("");
-                format!("\"{u}\"")
+                rust_string_literal(u)
             };
             out.push_str(&format!(
                 "{indent}let {id_ident}_body = nodes::http_get({url_expr}).await?;\n"
@@ -349,7 +400,7 @@ fn generate_node_call(
                     .get("path")
                     .and_then(|v| v.as_str())
                     .unwrap_or("");
-                format!("\"{p}\"")
+                rust_string_literal(p)
             };
             out.push_str(&format!(
                 "{indent}let {id_ident}_content = nodes::fs_read({path_expr})?;\n"
@@ -364,7 +415,7 @@ fn generate_node_call(
                     .get("path")
                     .and_then(|v| v.as_str())
                     .unwrap_or("");
-                format!("\"{p}\"")
+                rust_string_literal(p)
             };
             let content_expr = if let Some(&(src, sport)) = in_edges.get("content") {
                 format!("&{}_{}", sanitize_ident(src), sanitize_ident(sport))
@@ -374,7 +425,7 @@ fn generate_node_call(
                     .get("content")
                     .and_then(|v| v.as_str())
                     .unwrap_or("");
-                format!("\"{c}\"")
+                rust_string_literal(c)
             };
             out.push_str(&format!(
                 "{indent}nodes::fs_write({path_expr}, {content_expr})?;\n"
@@ -390,7 +441,7 @@ fn generate_node_call(
                     .cloned()
                     .unwrap_or(serde_json::json!(""));
                 match t {
-                    serde_json::Value::String(s) => format!("\"{s}\""),
+                    serde_json::Value::String(s) => rust_string_literal(&s),
                     other => format!("serde_json::json!({other})"),
                 }
             };
@@ -414,7 +465,7 @@ fn generate_node_call(
                     sanitize_ident(sport)
                 )
             } else if let Some(p) = node.config.get("path").and_then(|v| v.as_str()) {
-                format!("Some(\"{p}\")")
+                format!("Some({})", rust_string_literal(p))
             } else {
                 "None".to_string()
             };
@@ -431,7 +482,7 @@ fn generate_node_call(
                     .get("text")
                     .and_then(|v| v.as_str())
                     .unwrap_or("");
-                format!("\"{t}\"")
+                rust_string_literal(t)
             };
             let trim = node
                 .config
@@ -466,7 +517,7 @@ fn generate_node_call(
                     .get("duration")
                     .and_then(|v| v.as_str())
                     .unwrap_or("0ms");
-                format!("\"{d}\"")
+                rust_string_literal(d)
             };
             out.push_str(&format!("{indent}nodes::delay({dur_expr}).await?;\n"));
         }
@@ -479,7 +530,7 @@ fn generate_node_call(
                     .get("path")
                     .and_then(|v| v.as_str())
                     .unwrap_or("");
-                format!("\"{p}\"")
+                rust_string_literal(p)
             };
             out.push_str(&format!(
                 "{indent}let {id_ident}_path = nodes::string_to_path({path_expr})?;\n"
@@ -681,6 +732,24 @@ mod tests {
         assert_eq!(sanitize_ident("welcome-user"), "welcome_user");
         assert_eq!(sanitize_ident("123node"), "_123node");
         assert_eq!(sanitize_ident("node.out"), "node_out");
+        assert_eq!(sanitize_ident("match"), "_match");
+    }
+
+    #[test]
+    fn escapes_untrusted_strings_in_generated_rust() {
+        let graph: GraphSpec = serde_json::from_value(json!({
+            "graph_version": "0.1",
+            "nodes": [
+                {"id": "line\nbreak", "kind": "log_output", "config": {"text": "\"; panic!(\"injected\"); //"}}
+            ],
+            "edges": []
+        }))
+        .unwrap();
+        let code = generate_main_rs(&graph, &["line\nbreak".to_string()]).unwrap();
+
+        assert!(code.contains("// 🚀 Node: 'line break'"));
+        assert!(code.contains("\\\"; panic!(\\\"injected\\\"); //"));
+        assert!(!code.contains("log_output(\"\";"));
     }
 
     #[test]

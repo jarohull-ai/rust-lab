@@ -1,4 +1,4 @@
-use api::{app, AppState, ExportResponse, HealthResponse, ValidateResponse};
+use api::{app, AppState, CompileResponse, ExportResponse, HealthResponse, ValidateResponse};
 use axum::{
     body::Body,
     http::{header, Method, Request, StatusCode},
@@ -162,9 +162,30 @@ async fn export_endpoint_generates_project_source_files() {
 }
 
 #[tokio::test]
+async fn compile_endpoint_checks_generated_rust_offline() {
+    let router = build_router();
+    let request = json!({
+        "project_name": "compile_check",
+        "graph": {
+            "graph_version": "0.1",
+            "nodes": [
+                { "id": "cleaner", "kind": "text_clean", "config": { "text": "Compile me" } },
+                { "id": "logger", "kind": "log_output", "config": {} }
+            ],
+            "edges": [
+                { "from": { "node": "cleaner", "port": "cleaned" }, "to": { "node": "logger", "port": "text" } }
+            ]
+        }
+    });
+
+    let response: CompileResponse = post_json(router, "/api/compile", request).await;
+    assert!(response.success, "cargo check failed: {}", response.stderr);
+}
+
+#[tokio::test]
 async fn export_disk_endpoint_writes_generated_project_to_temp_dir() {
     let router = build_router();
-    let temp_out = std::env::temp_dir().join("test_rust_lab_api_export_professional");
+    let temp_out = std::path::PathBuf::from("target/exports/test_rust_lab_api_export");
     let _ = std::fs::remove_dir_all(&temp_out);
 
     let disk_req = json!({
@@ -187,11 +208,32 @@ async fn export_disk_endpoint_writes_generated_project_to_temp_dir() {
     assert!(temp_out.join("Cargo.toml").exists());
     assert!(temp_out.join("src/main.rs").exists());
     assert!(temp_out.join("src/nodes.rs").exists());
-    assert!(response
-        .output_dir
-        .starts_with(std::env::temp_dir().to_string_lossy().as_ref()));
+    assert!(response.output_dir.starts_with("target/exports/"));
 
     let _ = std::fs::remove_dir_all(&temp_out);
+}
+
+#[tokio::test]
+async fn export_disk_endpoint_rejects_paths_outside_export_workspace() {
+    let router = build_router();
+    let disk_req = json!({
+        "project_name": "blocked_app",
+        "output_dir": "/tmp/rust-lab-must-not-write-here",
+        "graph": {
+            "graph_version": "0.1",
+            "nodes": [{ "id": "logger", "kind": "log_output", "config": { "text": "safe" } }],
+            "edges": []
+        }
+    });
+    let req = Request::builder()
+        .uri("/api/export/disk")
+        .method(Method::POST)
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(serde_json::to_vec(&disk_req).unwrap()))
+        .unwrap();
+
+    let response = router.oneshot(req).await.unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 }
 
 #[tokio::test]

@@ -6,6 +6,20 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - Official Rust logo on the welcome screen, application toolbar, and browser tab.
+- Portable `.rustlab.json` project files with browser autosave, Open/Save, and project naming.
+- Debounced 100-step graph Undo/Redo history with standard keyboard shortcuts.
+- Browser-generated Cargo ZIP downloads without server-side path access.
+- Real offline `cargo check` feedback in the generated Rust code panel.
+- Guided lessons for safe file reading and writing, bringing the course to five lessons.
+- Keyboard-accessible node palette, visible focus styling, and reduced-motion support.
+- Hardened Docker and Compose deployment for a contained local instance.
+
+### Security
+- The API now binds to `127.0.0.1` unless `RUST_LAB_HOST` is explicitly configured.
+- Untrusted graph content can no longer extend execution allowlists.
+- File reads now use an allowlist in addition to sensitive-path denial.
+- Execution has a 30-second timeout and requests have a 1 MiB body limit.
+- Server-side exports are confined to `target/exports/`.
 
 ## [0.2.0] - 2026-10-19
 

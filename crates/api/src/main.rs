@@ -1,5 +1,6 @@
+use anyhow::Context;
 use api::{app, AppState};
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
@@ -20,7 +21,16 @@ async fn main() -> anyhow::Result<()> {
     let state = AppState::default();
     let router = app(state);
 
-    let addr = SocketAddr::from(([0, 0, 0, 0], port));
+    let host: IpAddr = std::env::var("RUST_LAB_HOST")
+        .unwrap_or_else(|_| "127.0.0.1".to_string())
+        .parse()
+        .context("RUST_LAB_HOST must be a valid IP address")?;
+    if !host.is_loopback() {
+        eprintln!(
+            "⚠️  Rust Lab is listening outside this computer. Use only on a trusted network."
+        );
+    }
+    let addr = SocketAddr::new(host, port);
     println!("🦀 Rust Lab API Server listening on http://{}", addr);
 
     let listener = tokio::net::TcpListener::bind(addr).await?;

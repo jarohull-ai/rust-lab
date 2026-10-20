@@ -57,6 +57,8 @@ export const CustomNode = memo(({ id, data }: CustomNodeProps) => {
 
   return (
     <div
+      role="group"
+      aria-label={t('node.ariaLabel', { id, kind })}
       className={`min-w-[240px] max-w-[320px] rounded-xl bg-slate-900/95 backdrop-blur-md border text-slate-200 shadow-xl transition-all duration-200 ${getBorderColor()}`}
     >
       {/* Node Header */}
@@ -84,6 +86,7 @@ export const CustomNode = memo(({ id, data }: CustomNodeProps) => {
         </div>
 
         <button
+          type="button"
           onClick={() => onDelete(id)}
           className="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
           title={t('node.delete')}
@@ -106,6 +109,7 @@ export const CustomNode = memo(({ id, data }: CustomNodeProps) => {
                     type="target"
                     position={Position.Left}
                     id={pin.name}
+                    aria-label={t('pin.input', { name: pin.name, type: pin.pin_type })}
                     style={{ backgroundColor: color.hex, left: -18 }}
                   />
                   <span
@@ -313,6 +317,7 @@ export const CustomNode = memo(({ id, data }: CustomNodeProps) => {
                     type="source"
                     position={Position.Right}
                     id={pin.name}
+                    aria-label={t('pin.output', { name: pin.name, type: pin.pin_type })}
                     style={{ backgroundColor: color.hex, right: -18 }}
                   />
                 </div>

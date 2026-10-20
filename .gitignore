@@ -24,9 +24,9 @@ examples/*.json.bak
 *.bak
 data/output*
 data/converted*
+*.rustlab.json
 
 # Node / UI
 **/node_modules/
 **/dist/
 ui/.env
-
