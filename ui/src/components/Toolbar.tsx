@@ -5,7 +5,6 @@ import {
   FolderDown,
   Trash2,
   BookOpen,
-  Cpu,
   GraduationCap,
 } from 'lucide-react';
 import { SeedTutorButton } from './SeedTutorButton';
@@ -52,8 +51,8 @@ export const Toolbar: React.FC<ToolbarProps> = ({
       {/* Brand */}
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-2">
-          <div className="p-1.5 rounded-lg bg-orange-600/20 border border-orange-500/40 text-orange-400">
-            <Cpu className="w-5 h-5" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-orange-300/50 bg-orange-400 shadow-sm shadow-orange-500/20">
+            <img src="/rust-logo.svg" alt="" className="h-6 w-6" />
           </div>
           <div>
             <div className="flex items-center gap-2">

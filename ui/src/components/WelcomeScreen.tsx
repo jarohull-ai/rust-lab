@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowRight, Braces, GraduationCap, Lightbulb, Workflow } from 'lucide-react';
+import { ArrowRight, Braces, Lightbulb, Workflow } from 'lucide-react';
 import { useI18n } from '../i18n';
 import packageInfo from '../../package.json';
 
@@ -56,8 +56,8 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
 
         <div className="p-6 sm:p-8">
           <div className="mx-auto max-w-lg text-center">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl border border-orange-500/30 bg-orange-500/15">
-              <GraduationCap className="h-6 w-6 text-orange-400" />
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl border border-orange-300/50 bg-orange-400 shadow-lg shadow-orange-500/20">
+              <img src="/rust-logo.svg" alt="" className="h-12 w-12" />
             </div>
             <h1 id="welcome-title" className="mt-4 text-2xl font-bold tracking-tight text-white">
               {t('welcome.title')}

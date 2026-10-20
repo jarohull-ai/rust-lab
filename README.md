@@ -147,3 +147,7 @@ npm run build
 ## License
 
 Rust Lab is available under the MIT or Apache-2.0 license.
+
+The official Rust logo is used unmodified under CC BY 4.0. Rust Lab is an independent
+educational project and is not affiliated with or endorsed by the Rust Project or Rust
+Foundation. See [NOTICE.md](NOTICE.md) for attribution and trademark information.

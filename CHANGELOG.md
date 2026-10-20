@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- Official Rust logo on the welcome screen, application toolbar, and browser tab.
+
 ## [0.2.0] - 2026-10-19
 
 Local release candidate; not published to crates.io.
