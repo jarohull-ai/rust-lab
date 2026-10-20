@@ -7,6 +7,10 @@
 [![Support on Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-Donate-yellow.svg?logo=buy-me-a-coffee)](https://buymeacoffee.com/HISTORYINANUTSHELL)
 [![Sponsor](https://img.shields.io/badge/GitHub-Sponsor-pink?logo=github)](https://github.com/sponsors/jarohull-ai)
 
+<p align="center">
+  <img src="docs/assets/polyglot-lab-preview.png" alt="Polyglot Lab Visual Interface" width="100%" />
+</p>
+
 Polyglot Lab is an interactive visual programming and prototyping environment. Beginners can connect typed
 nodes and immediately inspect idiomatic code generated in **Rust**, **Go**, **Python**, or **C++**; intermediate
 and advanced learners can open **Workspace Lab** to create native projects, import public GitHub repositories,
@@ -15,15 +19,13 @@ explore package ecosystems (`crates.io`, `pkg.go.dev`, `PyPI`, and CMake/C++ lib
 > **Desktop Installers (Windows, macOS, Linux):**
 > Ready-to-use standalone desktop installers (`.exe`, `.msi`, `.dmg`, `.AppImage`, `.deb`) are available under [**Releases**](https://github.com/jarohull-ai/rust-lab/releases). No terminal setup or cloud subscription required.
 
-## Why Rust Lab?
+## Why Polyglot Lab?
 
-Rust Lab joins three workflows that are normally split across unrelated tools:
+Polyglot Lab joins three workflows that are normally split across unrelated tools:
 
-- **Learn:** five guided lessons, typed visual connections, immediate validation, and a local
-  deterministic SEED Tutor.
-- **Build:** convert a valid graph into readable Rust and export a standalone Cargo project.
-- **Experiment:** work with real Cargo projects, public GitHub repositories, and crates.io
-  dependencies without executing imported code directly on the host.
+- **Learn:** five guided lessons, typed visual connections, immediate validation, and a local deterministic SEED Tutor.
+- **Build:** convert a valid graph into readable, idiomatic code across **Rust**, **Go**, **Python**, and **C++** with live syntax highlighting and one-click export.
+- **Experiment:** work with real projects, public GitHub repositories, and package ecosystems without executing unverified imported code directly on the host.
 
 No account, cloud service, API key, or LLM is required for the learning experience.
 
