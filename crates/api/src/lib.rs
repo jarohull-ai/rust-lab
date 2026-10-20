@@ -1,3 +1,4 @@
+use axum::http::HeaderValue;
 use axum::{
     extract::{DefaultBodyLimit, State},
     http::StatusCode,
@@ -12,7 +13,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::CorsLayer;
 use tower_http::services::ServeDir;
 
 mod workspace;
@@ -147,10 +148,30 @@ pub fn app(state: AppState) -> Router {
         router = router.fallback_service(ServeDir::new("ui/dist"));
     }
 
+    let allowed_origins = [
+        "tauri://localhost".parse::<HeaderValue>().unwrap(),
+        "https://tauri.localhost".parse::<HeaderValue>().unwrap(),
+        "http://tauri.localhost".parse::<HeaderValue>().unwrap(),
+        "http://127.0.0.1:3030".parse::<HeaderValue>().unwrap(),
+        "http://localhost:3030".parse::<HeaderValue>().unwrap(),
+        "http://127.0.0.1:5173".parse::<HeaderValue>().unwrap(),
+        "http://localhost:5173".parse::<HeaderValue>().unwrap(),
+    ];
+
     let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods(Any)
-        .allow_headers(Any);
+        .allow_origin(allowed_origins)
+        .allow_methods([
+            axum::http::Method::GET,
+            axum::http::Method::POST,
+            axum::http::Method::PUT,
+            axum::http::Method::DELETE,
+            axum::http::Method::OPTIONS,
+        ])
+        .allow_headers([
+            axum::http::header::CONTENT_TYPE,
+            axum::http::header::HeaderName::from_static("x-requested-with"),
+            axum::http::header::HeaderName::from_static("x-lab-token"),
+        ]);
 
     router
         .layer(DefaultBodyLimit::max(1_048_576))

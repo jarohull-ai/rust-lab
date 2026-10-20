@@ -80,7 +80,7 @@ pub struct SaveFileRequest {
     pub content: String,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CargoAction {
     Fetch,
@@ -602,14 +602,22 @@ async fn import_github(
         }
     };
     let _ = output;
-    if !destination.join("Cargo.toml").exists() {
+    let has_cargo = destination.join("Cargo.toml").exists();
+    let has_go = destination.join("go.mod").exists();
+    let has_py =
+        destination.join("requirements.txt").exists() || destination.join("main.py").exists();
+    let has_cmake = destination.join("CMakeLists.txt").exists();
+
+    if !has_cargo && !has_go && !has_py && !has_cmake {
         let _ = fs::remove_dir_all(&slot);
         return Err(api_error(
             StatusCode::UNPROCESSABLE_ENTITY,
-            "Repository root has no Cargo.toml",
+            "Repository root must contain a project manifest (Cargo.toml, go.mod, requirements.txt, or CMakeLists.txt)",
         ));
     }
-    ensure_workspace_boundary(&destination.join("Cargo.toml"))?;
+    if has_cargo {
+        ensure_workspace_boundary(&destination.join("Cargo.toml"))?;
+    }
     let (files, bytes) = project_size(&destination)?;
     if files > MAX_PROJECT_FILES || bytes > MAX_PROJECT_BYTES {
         let _ = fs::remove_dir_all(&slot);
@@ -964,6 +972,97 @@ async fn run_polyglot_process(
         return Ok((output, "system-check"));
     };
 
+    let bwrap = Path::new("/usr/bin/bwrap");
+    if bwrap.is_file() {
+        let mut cmd = limited_bwrap_command(bwrap);
+        cmd.args([
+            "--unshare-all",
+            "--die-with-parent",
+            "--new-session",
+            "--clearenv",
+            "--proc",
+            "/proc",
+            "--dev",
+            "/dev",
+            "--tmpfs",
+            "/tmp",
+            "--ro-bind",
+            "/usr",
+            "/usr",
+            "--ro-bind",
+            "/etc",
+            "/etc",
+            "--dir",
+            "/workspace",
+            "--bind",
+        ]);
+        cmd.arg(root).arg("/workspace");
+        cmd.args([
+            "--setenv",
+            "HOME",
+            "/tmp",
+            "--setenv",
+            "PATH",
+            "/usr/bin:/bin:/usr/local/bin",
+        ]);
+        for system_path in ["/bin", "/lib", "/lib64"] {
+            if Path::new(system_path).exists() {
+                cmd.args(["--ro-bind", system_path, system_path]);
+            }
+        }
+        cmd.arg("--chdir").arg("/workspace");
+        cmd.arg(&bin);
+        cmd.args(&args);
+        cmd.kill_on_drop(true);
+
+        if let Ok(Ok(output)) = tokio::time::timeout(Duration::from_secs(30), cmd.output()).await {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            if output.status.success() || !stderr.starts_with("bwrap:") {
+                return Ok((output, "bwrap-sandbox"));
+            }
+        }
+    }
+
+    // Attempt Docker isolation if available on the system
+    if let Some(docker) = find_executable("docker") {
+        let docker_image = match target {
+            lab_node_sdk::LanguageTarget::Python => Some("python:3.12-slim"),
+            _ => None,
+        };
+        if let Some(image) = docker_image {
+            let mut dcmd = tokio::process::Command::new(&docker);
+            dcmd.args(["run", "--rm"]);
+            if action != CargoAction::Fetch {
+                dcmd.args(["--network", "none"]);
+            }
+            dcmd.args([
+                "--cap-drop",
+                "ALL",
+                "--security-opt",
+                "no-new-privileges",
+                "--memory",
+                "2g",
+                "--cpus",
+                "2",
+            ]);
+            dcmd.arg("-v").arg(format!("{}:/workspace", root.display()));
+            dcmd.arg("-w").arg("/workspace");
+            dcmd.arg(image);
+            dcmd.arg(exe_name);
+            dcmd.args(&args);
+            dcmd.kill_on_drop(true);
+
+            if let Ok(Ok(output)) =
+                tokio::time::timeout(Duration::from_secs(30), dcmd.output()).await
+            {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                if output.status.success() || !stderr.contains("Unable to find image") {
+                    return Ok((output, "docker-sandbox"));
+                }
+            }
+        }
+    }
+
     let mut cmd = tokio::process::Command::new(bin);
     cmd.current_dir(root);
     cmd.args(args);
@@ -979,7 +1078,7 @@ async fn run_polyglot_process(
         })?
         .map_err(|err| api_error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?;
 
-    Ok((output, "host-process"))
+    Ok((output, "host-unsandboxed"))
 }
 
 async fn run_cargo(
@@ -1012,13 +1111,14 @@ async fn run_cargo(
     } else {
         sandboxed_cargo(&root, &cache, request.action).await?
     };
+    let is_sandboxed = sandbox.contains("bwrap") || sandbox.contains("docker");
     let response = CargoCommandResponse {
         success: output.status.success(),
         action: request.action,
         stdout: bounded_output(&output.stdout),
         stderr: bounded_output(&output.stderr),
         duration_ms: started.elapsed().as_millis(),
-        sandboxed: true,
+        sandboxed: is_sandboxed,
         sandbox: sandbox.to_string(),
     };
     append_trajectory(

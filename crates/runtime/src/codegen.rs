@@ -1030,7 +1030,8 @@ mod tests {
             "nodes": [
                 {"id": "cond", "kind": "condition", "config": {"value": true, "true_branch": "print_true", "false_branch": "print_false"}},
                 {"id": "print_true", "kind": "log_output", "config": {"text": "TRUE_PATH"}},
-                {"id": "print_false", "kind": "log_output", "config": {"text": "FALSE_PATH"}}
+                {"id": "print_false", "kind": "log_output", "config": {"text": "FALSE_PATH"}},
+                {"id": "done", "kind": "log_output", "config": {"text": "ALL_DONE"}}
             ],
             "edges": []
         })).unwrap();
@@ -1040,6 +1041,7 @@ mod tests {
         let go_main = go_proj.files.iter().find(|f| f.path == "main.go").unwrap();
         assert!(go_main.content.contains("if true {"));
         assert!(go_main.content.contains("} else {"));
+        assert!(go_main.content.contains("done"));
 
         // 2. Python branching
         let py_proj =
@@ -1047,6 +1049,7 @@ mod tests {
         let py_main = py_proj.files.iter().find(|f| f.path == "main.py").unwrap();
         assert!(py_main.content.contains("if True:"));
         assert!(py_main.content.contains("else:"));
+        assert!(py_main.content.contains("done"));
 
         // 3. C++ branching
         let cpp_proj =
@@ -1058,5 +1061,6 @@ mod tests {
             .unwrap();
         assert!(cpp_main.content.contains("if (true) {"));
         assert!(cpp_main.content.contains("} else {"));
+        assert!(cpp_main.content.contains("done"));
     }
 }

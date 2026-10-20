@@ -74,4 +74,4 @@ jobs:
 
             *No server required. Fully offline-capable.*
           releaseDraft: false
-          prerelease: false
+          prerelease: true

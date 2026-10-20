@@ -454,7 +454,29 @@ async fn lab_workspace_runs_python_toolchain_action() {
     .await;
 
     assert!(res.success);
-    assert_eq!(res.sandbox, "host-process");
+    assert_eq!(
+        res.sandboxed,
+        res.sandbox.contains("bwrap") || res.sandbox.contains("docker")
+    );
+
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[tokio::test]
+async fn cors_rejects_untrusted_origins() {
+    let (router, root) = build_lab_router();
+    let request = Request::builder()
+        .uri("/api/health")
+        .method(Method::OPTIONS)
+        .header(header::ORIGIN, "https://evil.example.com")
+        .header(header::ACCESS_CONTROL_REQUEST_METHOD, "POST")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = router.oneshot(request).await.unwrap();
+    // Untrusted origin should NOT have Access-Control-Allow-Origin header set to the evil origin
+    let allow_origin = response.headers().get(header::ACCESS_CONTROL_ALLOW_ORIGIN);
+    assert!(allow_origin.is_none());
 
     let _ = std::fs::remove_dir_all(root);
 }

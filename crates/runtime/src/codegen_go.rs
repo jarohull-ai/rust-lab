@@ -627,6 +627,15 @@ pub fn generate_main_go(graph: &GraphSpec, topo_order: &[String]) -> Result<Stri
         }
 
         body.push_str("\t}\n\n");
+
+        // 3. Common / merge nodes after condition
+        for id in &topo_order[cond_idx + 1..] {
+            if !true_exclusive.contains(id) && !false_exclusive.contains(id) {
+                if let Some(node) = node_map.get(id.as_str()) {
+                    body.push_str(&generate_go_node_call(node, graph, "\t"));
+                }
+            }
+        }
     }
 
     let code = format!(

@@ -139,7 +139,18 @@ inline void log_output(const T& text) {
         code.push_str(
             r#"inline std::string http_get(const std::string& url) {
     std::cout << "   HTTP GET: " << url << "\n";
-    return std::string("{\"status\":\"ok\",\"simulated_url\":\"") + url + "\"}";
+    std::string cmd = "curl -s -L \"" + url + "\"";
+    FILE* pipe = popen(cmd.c_str(), "r");
+    if (!pipe) {
+        throw std::runtime_error("Failed to execute curl: " + url);
+    }
+    char buffer[256];
+    std::string result = "";
+    while (fgets(buffer, sizeof(buffer), pipe) != NULL) {
+        result += buffer;
+    }
+    pclose(pipe);
+    return result;
 }
 
 "#,
@@ -149,8 +160,35 @@ inline void log_output(const T& text) {
     if used_kinds.contains("json_parse") {
         code.push_str(
             r#"inline std::string json_parse(const std::string& json_str, const std::string& path = "") {
-    std::cout << "   Parsing JSON: " << json_str << " (path: " << path << ")\n";
-    return json_str;
+    if (path.empty()) {
+        return json_str;
+    }
+    std::string target = "\"" + path + "\"";
+    size_t pos = json_str.find(target);
+    if (pos == std::string::npos) {
+        return "";
+    }
+    size_t colon = json_str.find(':', pos + target.size());
+    if (colon == std::string::npos) {
+        return "";
+    }
+    size_t start = json_str.find_first_not_of(" \t\r\n", colon + 1);
+    if (start == std::string::npos) {
+        return "";
+    }
+    if (json_str[start] == '"') {
+        size_t end = json_str.find('"', start + 1);
+        if (end != std::string::npos) {
+            return json_str.substr(start + 1, end - start - 1);
+        }
+    } else {
+        size_t end = json_str.find_first_of(",}\n\r", start);
+        if (end != std::string::npos) {
+            return json_str.substr(start, end - start);
+        }
+        return json_str.substr(start);
+    }
+    return "";
 }
 
 "#,
@@ -537,6 +575,15 @@ pub fn generate_main_cpp(graph: &GraphSpec, topo_order: &[String]) -> Result<Str
         }
 
         body.push_str("    }\n\n");
+
+        // 3. Common / merge nodes after condition
+        for id in &topo_order[cond_idx + 1..] {
+            if !true_exclusive.contains(id) && !false_exclusive.contains(id) {
+                if let Some(node) = node_map.get(id.as_str()) {
+                    body.push_str(&generate_cpp_node_call(node, graph, "    "));
+                }
+            }
+        }
     }
 
     let code = format!(

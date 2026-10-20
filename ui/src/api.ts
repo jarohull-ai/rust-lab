@@ -21,7 +21,11 @@ export function getApiUrl(path: string): string {
 
 export async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
   const url = getApiUrl(path);
-  return fetch(url, init);
+  const headers = new Headers(init?.headers);
+  if (!headers.has('X-Requested-With')) {
+    headers.set('X-Requested-With', 'Polyglot-Lab');
+  }
+  return fetch(url, { ...init, headers });
 }
 
 export async function apiFetchJson<T>(path: string, init?: RequestInit): Promise<T> {
