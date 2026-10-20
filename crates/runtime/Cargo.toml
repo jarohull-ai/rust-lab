@@ -19,4 +19,5 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 thiserror = "1"
 anyhow.workspace = true
 async-trait = "0.1"
+[target.'cfg(unix)'.dependencies]
 seed-core.workspace = true

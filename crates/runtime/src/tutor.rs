@@ -7,7 +7,30 @@
 use crate::plan;
 use crate::registry::NodeRegistry;
 use lab_node_sdk::{GraphSpec, PinType};
+#[cfg(unix)]
 use seed_core::KnowledgeStore;
+
+#[cfg(not(unix))]
+#[derive(Debug, Default)]
+struct KnowledgeStore;
+
+#[cfg(not(unix))]
+#[allow(dead_code)]
+struct MatchItem {
+    concept: String,
+}
+
+#[cfg(not(unix))]
+#[allow(dead_code)]
+impl KnowledgeStore {
+    fn new() -> Self {
+        Self
+    }
+    fn learn(&self, _concept: String, _domain: String, _vector: Vec<f32>) {}
+    fn query_top_k(&self, _vector: &[f32], _k: usize) -> (Vec<MatchItem>, Vec<f32>) {
+        (Vec::new(), Vec::new())
+    }
+}
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::sync::OnceLock;
