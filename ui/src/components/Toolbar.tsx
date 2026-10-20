@@ -352,15 +352,19 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           <span>{isExecuting ? t('toolbar.running') : t('toolbar.run')}</span>
         </button>
 
-        {/* Export Cargo */}
+        {/* Export Project */}
         <button
           onClick={onExportCargo}
           disabled={isExporting}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-orange-600 hover:bg-orange-500 text-white shadow-lg shadow-orange-600/20 transition-all disabled:opacity-50"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white shadow-lg transition-all disabled:opacity-50"
+          style={{
+            backgroundColor: 'var(--theme-accent, #ea580c)',
+            boxShadow: '0 4px 12px var(--theme-accent-glow, rgba(234, 88, 12, 0.2))',
+          }}
           title={t('toolbar.exportTitle')}
         >
           <FolderDown className="w-3.5 h-3.5" />
-          <span>{t('toolbar.export')}</span>
+          <span>{isExporting ? t('toolbar.exporting') : t('toolbar.export')}</span>
         </button>
         </>}
 

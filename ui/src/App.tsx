@@ -835,7 +835,10 @@ export const App: React.FC = () => {
     executionRevision === graphRevision ? executionReport : null;
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-slate-950 font-sans text-slate-100 select-none">
+    <div
+      data-theme={languageTarget}
+      className="flex flex-col h-screen w-screen bg-slate-950 font-sans text-slate-100 select-none transition-colors duration-300"
+    >
       {welcomeOpen && mode === 'graph' && (
         <WelcomeScreen
           onExplore={dismissWelcome}
@@ -875,6 +878,15 @@ export const App: React.FC = () => {
         lessonsOpen={lessonsOpen}
       />
 
+      {/* Dynamic Theme Glow Line */}
+      <div
+        className="h-[2px] w-full transition-all duration-300 z-20 shrink-0"
+        style={{
+          background: 'linear-gradient(90deg, transparent 0%, var(--theme-accent) 50%, transparent 100%)',
+          boxShadow: '0 0 10px var(--theme-accent-glow)',
+        }}
+      />
+
       {/* Main Workspace */}
       {mode === 'lab' ? (
         <React.Suspense fallback={<div className="flex flex-1 items-center justify-center bg-slate-950 text-sm text-slate-400">{t('lab.loading')}</div>}>
@@ -897,7 +909,40 @@ export const App: React.FC = () => {
               onClose={() => setLessonsOpen(false)}
             />
           )}
-          <div className="flex-1 w-full h-full">
+          <div className="flex-1 w-full h-full relative polyglot-ambient-glow">
+            {/* Dynamic Language Watermark Badge for classroom observability */}
+            <div className="absolute top-3 right-3 z-10 pointer-events-none flex items-center gap-2 rounded-full border border-slate-700/80 bg-slate-900/85 px-3 py-1.5 backdrop-blur-md shadow-xl transition-all duration-300">
+              <span
+                className="h-2 w-2 rounded-full animate-pulse"
+                style={{ backgroundColor: 'var(--theme-accent)' }}
+              />
+              <img
+                src={
+                  languageTarget === 'go'
+                    ? '/go-logo.svg'
+                    : languageTarget === 'python'
+                    ? '/python-logo.svg'
+                    : languageTarget === 'cpp'
+                    ? '/cpp-logo.svg'
+                    : '/rust-logo.svg'
+                }
+                alt=""
+                className="h-3.5 w-3.5 object-contain"
+              />
+              <span
+                className="text-[11px] font-mono font-bold tracking-wider uppercase"
+                style={{ color: 'var(--theme-accent)' }}
+              >
+                {languageTarget === 'go'
+                  ? 'GO 1.22'
+                  : languageTarget === 'python'
+                  ? 'PYTHON 3.11+'
+                  : languageTarget === 'cpp'
+                  ? 'C++20'
+                  : 'RUST 2021'}
+              </span>
+            </div>
+
             <ReactFlow
               nodes={enhancedNodes}
               edges={edges}
