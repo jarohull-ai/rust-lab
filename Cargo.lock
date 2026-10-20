@@ -78,12 +78,13 @@ checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
 name = "api"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "axum",
  "http-body-util",
  "lab-node-sdk",
+ "reqwest",
  "runtime",
  "serde",
  "serde_json",
@@ -736,7 +737,7 @@ dependencies = [
 
 [[package]]
 name = "lab-node-sdk"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1106,7 +1107,7 @@ dependencies = [
 
 [[package]]
 name = "runtime"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "async-trait",

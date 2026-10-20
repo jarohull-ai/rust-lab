@@ -4,7 +4,7 @@
 
 Rust Lab is a standalone learning environment for building typed data-flow graphs, seeing the Rust code they generate, and running the result. The default product language is English; Polish is available through the `EN / PL` switch in the UI.
 
-Current local release candidate: **v0.2.0**. It is not published to crates.io.
+Current local release candidate: **v0.3.0**. It is not published to crates.io.
 
 ## Project status
 
@@ -16,6 +16,37 @@ Current local release candidate: **v0.2.0**. It is not published to crates.io.
 - React Flow canvas with generated Rust code, execution diagnostics, and real `cargo check` feedback.
 - SEED Tutor provides adaptive, deterministic learning hints without an LLM.
 - Five guided lessons with live completion checks and browser-local progress.
+- Real Cargo Workspace mode for prototypes, public GitHub repositories, crates.io dependencies,
+  source editing, and isolated Cargo commands.
+
+## Real Cargo Workspace Lab
+
+Switch from **Graph** to **Lab** in the main toolbar. Lab mode works with real Cargo projects:
+
+1. Create an independent binary package or import a public
+   `https://github.com/OWNER/REPOSITORY` URL.
+2. Browse supported source and configuration files without exposing arbitrary host paths.
+3. Edit and save Rust, TOML, Markdown, JSON, YAML, and text files.
+4. Search public crates.io packages and add a selected version to `Cargo.toml`.
+5. Use **Fetch** to download dependencies into a cache dedicated to that project.
+6. Run **Check**, **Test**, **Run**, **Clippy**, or **Fmt** offline in an isolated sandbox.
+
+Every dependency change and Cargo command requires an explicit confirmation in the UI. Public
+crates and repositories do not require an account. GitHub authentication for private repositories
+and crates.io credentials for publishing are deliberately outside L1.
+
+### Workspace sandbox
+
+Rust Lab never executes imported code directly on the host. It prefers Bubblewrap and falls back
+to a local `rust:bookworm` Docker image when the host cannot create an unprivileged namespace.
+Execution has no network, drops Linux capabilities, uses CPU/memory/process/time limits, and sees
+only the selected project plus its isolated dependency cache. **Fetch** and **Add crate** use a
+separate contained phase with network access but no host Cargo credentials. Their Cargo credential
+providers and external Git transport are disabled.
+
+The local Workspace Lab therefore requires either a working Bubblewrap installation or Docker
+with the `rust:bookworm` image. The standard graph, lessons, code generation, and export continue
+to work without either sandbox backend.
 
 ## Workspace
 

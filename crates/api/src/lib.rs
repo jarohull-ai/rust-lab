@@ -15,17 +15,25 @@ use std::sync::Arc;
 use std::time::Duration;
 use tower_http::services::ServeDir;
 
+mod workspace;
+pub use workspace::{
+    CargoAction, CargoCommandRequest, CargoCommandResponse, CrateSearchResponse, DependencyRequest,
+    GitHubImportRequest, LabFile, LabProject, NewProjectRequest, SaveFileRequest, WorkspaceTree,
+};
+
 static COMPILE_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Clone)]
 pub struct AppState {
     pub registry: Arc<NodeRegistry>,
+    pub workspace_root: Arc<PathBuf>,
 }
 
 impl Default for AppState {
     fn default() -> Self {
         Self {
             registry: Arc::new(NodeRegistry::default()),
+            workspace_root: Arc::new(PathBuf::from("target/rust-lab-workspaces")),
         }
     }
 }
@@ -123,6 +131,8 @@ pub fn app(state: AppState) -> Router {
         .route("/api/compile", post(compile_handler))
         .route("/api/export/disk", post(export_disk_handler))
         .route("/api/tutor/hints", post(tutor_hints_handler));
+
+    router = workspace::routes(router);
 
     if Path::new("ui/dist").exists() {
         router = router.fallback_service(ServeDir::new("ui/dist"));

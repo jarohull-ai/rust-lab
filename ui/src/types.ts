@@ -81,6 +81,47 @@ export interface CompileResponse {
   stderr: string;
 }
 
+export interface LabProject {
+  id: string;
+  name: string;
+  source: string;
+  created_at: number;
+}
+
+export interface WorkspaceEntry {
+  path: string;
+  kind: 'file' | 'directory';
+  size: number;
+}
+
+export interface WorkspaceTree {
+  project: LabProject;
+  entries: WorkspaceEntry[];
+}
+
+export interface LabFile {
+  project_id: string;
+  path: string;
+  content: string;
+}
+
+export interface CargoCommandResponse {
+  success: boolean;
+  action: 'fetch' | 'check' | 'test' | 'run' | 'clippy' | 'fmt';
+  stdout: string;
+  stderr: string;
+  duration_ms: number;
+  sandboxed: boolean;
+  sandbox: string;
+}
+
+export interface CrateSummary {
+  name: string;
+  max_version: string;
+  description: string;
+  downloads: number;
+}
+
 export interface UiLog {
   id: number;
   timestamp: number;

@@ -19,6 +19,7 @@ import { ConsoleOutput } from './components/ConsoleOutput';
 import { Toolbar } from './components/Toolbar';
 import { GuidedLessons } from './components/GuidedLessons';
 import { WelcomeScreen } from './components/WelcomeScreen';
+import { WorkspaceLab } from './components/WorkspaceLab';
 import { createLessonSetup, LessonId } from './lessons';
 import {
   AUTOSAVE_KEY,
@@ -123,6 +124,7 @@ export const App: React.FC = () => {
   const [welcomeOpen, setWelcomeOpen] = useState(
     () => window.localStorage.getItem(WELCOME_KEY) !== '1'
   );
+  const [mode, setMode] = useState<'graph' | 'lab'>('graph');
 
   const [isValidating, setIsValidating] = useState<boolean>(false);
   const [isExecuting, setIsExecuting] = useState<boolean>(false);
@@ -809,7 +811,7 @@ export const App: React.FC = () => {
 
   return (
     <div className="flex flex-col h-screen w-screen bg-slate-950 font-sans text-slate-100 select-none">
-      {welcomeOpen && (
+      {welcomeOpen && mode === 'graph' && (
         <WelcomeScreen
           onExplore={dismissWelcome}
           onStartLesson={() => {
@@ -821,6 +823,8 @@ export const App: React.FC = () => {
 
       {/* Top Navigation & Actions */}
       <Toolbar
+        mode={mode}
+        onModeChange={setMode}
         graph={currentGraph}
         projectName={projectName}
         onProjectNameChange={setProjectName}
@@ -845,7 +849,7 @@ export const App: React.FC = () => {
       />
 
       {/* Main Workspace */}
-      <div className="flex flex-1 overflow-hidden">
+      {mode === 'lab' ? <WorkspaceLab /> : <div className="flex flex-1 overflow-hidden">
         {/* Left Sidebar: Node Palette */}
         <Sidebar nodeSpecs={nodeSpecs} onAddNode={addNodeWithKind} />
 
@@ -904,7 +908,7 @@ export const App: React.FC = () => {
           onRefresh={refreshCode}
           onCompile={handleCompile}
         />
-      </div>
+      </div>}
     </div>
   );
 };

@@ -9,8 +9,22 @@ use serde::de::DeserializeOwned;
 use serde_json::{json, Value};
 use tower::ServiceExt;
 
+static LAB_TEST_SEQUENCE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
 fn build_router() -> axum::Router {
     app(AppState::default())
+}
+
+fn build_lab_router() -> (axum::Router, std::path::PathBuf) {
+    let sequence = LAB_TEST_SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let root = std::path::PathBuf::from("target/rust-lab-api-tests")
+        .join(format!("{}-{sequence}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let state = AppState {
+        registry: std::sync::Arc::new(runtime::NodeRegistry::default()),
+        workspace_root: std::sync::Arc::new(root.clone()),
+    };
+    (app(state), root)
 }
 
 async fn get_json<T: DeserializeOwned>(router: axum::Router, path: &str) -> T {
@@ -318,4 +332,118 @@ async fn runtime_allows_http_get_to_httpbin() {
             "The execution policy should allow the configured domain: {err_str}"
         );
     }
+}
+
+#[tokio::test]
+async fn lab_workspace_creates_reads_and_updates_a_cargo_project() {
+    let (router, root) = build_lab_router();
+    let project: api::LabProject = post_json(
+        router.clone(),
+        "/api/lab/projects",
+        json!({ "name": "First Prototype" }),
+    )
+    .await;
+    assert!(project.id.starts_with("first-prototype-"));
+
+    let tree: api::WorkspaceTree = get_json(
+        router.clone(),
+        &format!("/api/lab/projects/{}/tree", project.id),
+    )
+    .await;
+    assert!(tree.entries.iter().any(|entry| entry.path == "Cargo.toml"));
+    assert!(tree.entries.iter().any(|entry| entry.path == "src/main.rs"));
+
+    let file: api::LabFile = get_json(
+        router.clone(),
+        &format!("/api/lab/file?project_id={}&path=src%2Fmain.rs", project.id),
+    )
+    .await;
+    assert!(file.content.contains("Hello from Rust Lab"));
+
+    let saved: api::LabFile = post_json_with_method(
+        router.clone(),
+        "/api/lab/file",
+        Method::PUT,
+        json!({
+            "project_id": project.id,
+            "path": "src/main.rs",
+            "content": "fn main() { println!(\"edited\"); }\n"
+        }),
+    )
+    .await;
+    assert!(saved.content.contains("edited"));
+    let _ = std::fs::remove_dir_all(root);
+}
+
+async fn post_json_with_method<T: DeserializeOwned>(
+    router: axum::Router,
+    path: &str,
+    method: Method,
+    payload: Value,
+) -> T {
+    let req = Request::builder()
+        .uri(path)
+        .method(method)
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(serde_json::to_vec(&payload).unwrap()))
+        .unwrap();
+    let response = router.oneshot(req).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    serde_json::from_slice(&body).unwrap()
+}
+
+#[tokio::test]
+async fn lab_workspace_rejects_unsafe_imports_paths_and_unapproved_execution() {
+    let (router, root) = build_lab_router();
+    let request = Request::builder()
+        .uri("/api/lab/import/github")
+        .method(Method::POST)
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(
+            serde_json::to_vec(&json!({ "url": "https://evil.example/project" })).unwrap(),
+        ))
+        .unwrap();
+    assert_eq!(
+        router.clone().oneshot(request).await.unwrap().status(),
+        StatusCode::BAD_REQUEST
+    );
+
+    let project: api::LabProject = post_json(
+        router.clone(),
+        "/api/lab/projects",
+        json!({ "name": "Guarded" }),
+    )
+    .await;
+    let request = Request::builder()
+        .uri(format!(
+            "/api/lab/file?project_id={}&path=..%2Fproject.json",
+            project.id
+        ))
+        .method(Method::GET)
+        .body(Body::empty())
+        .unwrap();
+    assert_eq!(
+        router.clone().oneshot(request).await.unwrap().status(),
+        StatusCode::BAD_REQUEST
+    );
+
+    let request = Request::builder()
+        .uri("/api/lab/cargo")
+        .method(Method::POST)
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(
+            serde_json::to_vec(&json!({
+                "project_id": project.id,
+                "action": "run",
+                "approved": false
+            }))
+            .unwrap(),
+        ))
+        .unwrap();
+    assert_eq!(
+        router.oneshot(request).await.unwrap().status(),
+        StatusCode::FORBIDDEN
+    );
+    let _ = std::fs::remove_dir_all(root);
 }

@@ -11,6 +11,8 @@ import {
   Redo2,
   Save,
   Undo2,
+  FlaskConical,
+  Workflow,
 } from 'lucide-react';
 import { SeedTutorButton } from './SeedTutorButton';
 import { useI18n } from '../i18n';
@@ -18,6 +20,8 @@ import { GraphSpec } from '../types';
 import packageInfo from '../../package.json';
 
 interface ToolbarProps {
+  mode: 'graph' | 'lab';
+  onModeChange: (mode: 'graph' | 'lab') => void;
   graph: GraphSpec;
   projectName: string;
   onProjectNameChange: (name: string) => void;
@@ -42,6 +46,8 @@ interface ToolbarProps {
 }
 
 export const Toolbar: React.FC<ToolbarProps> = ({
+  mode,
+  onModeChange,
   graph,
   projectName,
   onProjectNameChange,
@@ -114,6 +120,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           </span>
         </div>
 
+        {mode === 'graph' && <>
         <div className="relative">
           <button
             type="button"
@@ -206,10 +213,29 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             <Redo2 className="h-3.5 w-3.5" />
           </button>
         </div>
+        </>}
       </div>
 
       {/* Action Buttons */}
       <div className="flex items-center gap-2">
+        <div className="flex items-center rounded-lg border border-slate-700 bg-slate-950 p-0.5">
+          <button
+            type="button"
+            onClick={() => onModeChange('graph')}
+            className={`flex items-center gap-1 rounded-md px-2.5 py-1 text-[10px] font-bold transition-colors ${mode === 'graph' ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-slate-100'}`}
+          >
+            <Workflow className="h-3.5 w-3.5" /> {t('toolbar.graph')}
+          </button>
+          <button
+            type="button"
+            onClick={() => onModeChange('lab')}
+            className={`flex items-center gap-1 rounded-md px-2.5 py-1 text-[10px] font-bold transition-colors ${mode === 'lab' ? 'bg-orange-600 text-white' : 'text-slate-400 hover:text-slate-100'}`}
+          >
+            <FlaskConical className="h-3.5 w-3.5" /> {t('toolbar.lab')}
+          </button>
+        </div>
+
+        {mode === 'graph' && <>
         <button
           type="button"
           onClick={onToggleLessons}
@@ -301,6 +327,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           <FolderDown className="w-3.5 h-3.5" />
           <span>{t('toolbar.export')}</span>
         </button>
+        </>}
 
         <div className="flex items-center rounded-lg border border-slate-700 bg-slate-800 p-0.5 text-[10px] font-bold">
           {(['en', 'pl'] as const).map((language) => (
