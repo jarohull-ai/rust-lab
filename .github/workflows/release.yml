@@ -22,17 +22,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: 'macos-latest'
-            args: '--target aarch64-apple-darwin'
-          - platform: 'macos-13'
-            args: '--target x86_64-apple-darwin'
           - platform: 'ubuntu-22.04'
-            args: ''
           - platform: 'windows-latest'
-            args: ''
+          - platform: 'macos-latest'
 
     runs-on: ${{ matrix.platform }}
-    timeout-minutes: 60
+    timeout-minutes: 45
 
     steps:
       - name: Check out repository
@@ -47,8 +42,6 @@ jobs:
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin' || matrix.platform == 'macos-13' && 'x86_64-apple-darwin' || '' }}
 
       - name: Install Linux dependencies
         if: matrix.platform == 'ubuntu-22.04'
@@ -76,10 +69,9 @@ jobs:
 
             ### Downloads:
             - **Windows**: `.msi` or `.exe` installer (x64)
-            - **macOS**: `.dmg` (Apple Silicon M1/M2/M3 & Intel Mac)
+            - **macOS**: `.dmg` (Apple Silicon M-series)
             - **Linux**: `.AppImage` (portable) or `.deb` (Ubuntu/Debian)
 
             *No server required. Fully offline-capable.*
           releaseDraft: false
           prerelease: false
-          args: ${{ matrix.args }}
