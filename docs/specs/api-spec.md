@@ -1,4 +1,4 @@
-# API Specification: Rust Lab v0.3
+# API Specification: Rust Lab v0.4.2-alpha.2
 
 ## Overview
 This document defines the JSON structure used to describe a Rust Lab graph,
@@ -6,6 +6,11 @@ as accepted by `crates/runtime` (`lab_node_sdk::GraphSpec`).
 
 It also records the local HTTP surface used by the bundled UI. The API is an alpha interface and
 is not a remotely hosted or multi-tenant service contract.
+
+Except for `GET /api/health`, requests require both `X-Requested-With: Polyglot-Lab` and the
+per-launch `X-Lab-Token`. Desktop clients receive the token through the Tauri command channel;
+same-origin web clients receive it in the generated root HTML. Missing or invalid session headers
+return `401 Unauthorized`. CORS is an additional browser boundary, not the authentication control.
 
 > v0.1.0 of this document described `type`/`params`/`source`/`target` fields that the
 > runtime never implemented. v0.2 documents the format the runtime actually reads.

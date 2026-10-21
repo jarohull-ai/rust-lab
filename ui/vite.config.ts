@@ -48,6 +48,12 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:3030',
         changeOrigin: true,
+        headers: process.env.RUST_LAB_API_TOKEN
+          ? {
+              'X-Requested-With': 'Polyglot-Lab',
+              'X-Lab-Token': process.env.RUST_LAB_API_TOKEN,
+            }
+          : undefined,
       },
     },
   },

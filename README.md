@@ -38,9 +38,10 @@ No account, cloud service, API key, or LLM is required for the learning experien
 | Graph editor, lessons, code generation | Rust stable, Node.js 22+, npm 10+ |
 | Offline Cargo `check/test/run/clippy/fmt` | Bubblewrap on Linux **or** a running Docker service |
 | Cargo dependency Fetch | A running Docker service and the local `rust:bookworm` image (`docker pull rust:bookworm`) |
+| Go/Python/C++ execution | Bubblewrap with the host toolchain or the digest-pinned Docker images listed in [Troubleshooting](docs/TROUBLESHOOTING.md) |
 | Public GitHub import and crates.io search | Internet connection |
 
-Linux, Windows, and macOS are supported host platforms for Polyglot Lab v0.4.1. Standalone desktop installers (.exe, .msi, .dmg, .AppImage, .deb) package the native UI and backend without requiring manual toolchain setup.
+Linux, Windows, and macOS are supported host platforms for Polyglot Lab v0.4.2-alpha.2. Standalone desktop installers (.exe, .msi, .dmg, .AppImage, .deb) package the native UI and backend; executing projects still requires Bubblewrap or pre-pulled sandbox images in a running Docker service.
 
 From a fresh checkout:
 
@@ -56,6 +57,8 @@ PORT=3031 ./scripts/run-local.sh
 
 The startup script checks the required tools, installs the locked UI dependencies when necessary,
 builds the interface, and starts the API on loopback only.
+`RUST_LAB_HOST` may select another loopback address, but non-loopback addresses are rejected because
+the API session and workspace controls are designed for local use only.
 
 ## Product modes
 
@@ -86,7 +89,9 @@ Rust Lab treats imported repositories, dependencies, generated code, and model-p
 untrusted.
 
 - Imported Cargo code is never executed directly by the Rust Lab process.
-- Offline commands prefer Bubblewrap and fall back to a hardened Docker container.
+- Offline commands prefer Bubblewrap and fall back to a hardened, digest-pinned Docker container.
+- Sandbox selection fails closed: missing or broken isolation returns an error and never executes
+  project code directly on the host.
 - The execution sandbox has no network, drops Linux capabilities, applies resource and time limits,
   and sees only the selected project and its dedicated dependency cache.
 - Dependency Fetch uses a separate Docker phase with network access but without host Cargo
@@ -94,6 +99,7 @@ untrusted.
 - Graph HTTP requests use an administrator-controlled domain allowlist.
 - Graph file access is restricted to configured read/write directories.
 - API requests are limited to 1 MiB; graph and Cargo execution have fixed timeouts.
+- Desktop API requests use an instance-specific loopback port and a random per-launch session token.
 - Cargo approvals and outcomes are recorded in a per-project `trajectory.jsonl` outside Git.
 
 Read [SECURITY.md](SECURITY.md) before exposing Rust Lab beyond your own machine, and see the full
@@ -119,11 +125,11 @@ For frontend development:
 
 ```bash
 # Terminal 1
-cargo run -p api
+RUST_LAB_API_TOKEN=development-only-token-at-least-32-chars cargo run -p api
 
 # Terminal 2
 npm --prefix ui ci
-npm --prefix ui run dev
+RUST_LAB_API_TOKEN=development-only-token-at-least-32-chars npm --prefix ui run dev
 ```
 
 Run the same gate used by CI:
@@ -173,7 +179,8 @@ decisions live in [docs/adr](docs/adr).
 
 ## Current limitations
 
-- The supported release host is Linux.
+- Desktop release artifacts target Linux, Windows, and macOS; Bubblewrap acceleration is Linux-only,
+  while Windows and macOS require Docker for project execution.
 - GitHub import supports public HTTPS repositories only.
 - crates.io integration supports search and dependency addition, not authentication or publishing.
 - Lab projects are stored locally under `target/rust-lab-workspaces/`; project management and

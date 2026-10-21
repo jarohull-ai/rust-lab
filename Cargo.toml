@@ -7,10 +7,11 @@ members = [
 ]
 exclude = [
     "src-tauri",
+    "vendor/glib-0.18.5-rustlab",
 ]
 
 [workspace.package]
-version = "0.4.2-alpha.1"
+version = "0.4.2-alpha.2"
 edition = "2021"
 rust-version = "1.85"
 license = "MIT OR Apache-2.0"

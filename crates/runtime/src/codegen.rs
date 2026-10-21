@@ -830,7 +830,7 @@ pub fn generate_polyglot_project(
             })
         }
         LanguageTarget::Cpp => {
-            let cmake = crate::codegen_cpp::generate_cmake_lists(&safe_name);
+            let cmake = crate::codegen_cpp::generate_cmake_lists(&safe_name, &used_kinds);
             let nodes_hpp = crate::codegen_cpp::generate_nodes_hpp(&used_kinds);
             let main_cpp = crate::codegen_cpp::generate_main_cpp(graph, &order)?;
 
@@ -1062,5 +1062,43 @@ mod tests {
         assert!(cpp_main.content.contains("if (true) {"));
         assert!(cpp_main.content.contains("} else {"));
         assert!(cpp_main.content.contains("done"));
+    }
+
+    #[test]
+    fn cpp_http_and_json_generation_uses_libraries_without_a_shell() {
+        use lab_node_sdk::LanguageTarget;
+
+        let graph: GraphSpec = serde_json::from_value(json!({
+            "graph_version": "0.1",
+            "nodes": [
+                {"id": "fetch", "kind": "http_get", "config": {"url": "https://example.com/data.json"}},
+                {"id": "parse", "kind": "json_parse", "config": {"path": "data.items.0.name"}}
+            ],
+            "edges": [
+                {"from": {"node": "fetch", "port": "body"}, "to": {"node": "parse", "port": "json_str"}}
+            ]
+        }))
+        .unwrap();
+
+        let project = generate_polyglot_project(&graph, "secure_cpp", LanguageTarget::Cpp).unwrap();
+        let nodes = project
+            .files
+            .iter()
+            .find(|file| file.path == "include/nodes.hpp")
+            .unwrap();
+        let cmake = project
+            .files
+            .iter()
+            .find(|file| file.path == "CMakeLists.txt")
+            .unwrap();
+
+        assert!(nodes.content.contains("curl_easy_perform"));
+        assert!(nodes.content.contains("nlohmann::json::parse"));
+        assert!(!nodes.content.contains("popen("));
+        assert!(!nodes.content.contains("system("));
+        assert!(cmake.content.contains("find_package(CURL REQUIRED)"));
+        assert!(cmake
+            .content
+            .contains("9cca280a4d0ccf0c08f47a99aa71d1b0e52f8d03"));
     }
 }
