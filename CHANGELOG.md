@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.4.2-alpha.4] - 2026-10-21
+
+### Fixed
+- Serialized GitHub Release creation before the platform build matrix, preventing concurrent
+  macOS, Windows, and Linux jobs from racing to create the same release.
+- Passed one immutable release ID to every Tauri build so each platform only uploads its own
+  installers to the already-created prerelease.
+
 ## [0.4.2-alpha.3] - 2026-10-21
 
 ### Security

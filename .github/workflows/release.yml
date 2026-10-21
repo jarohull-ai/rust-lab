@@ -14,8 +14,45 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  prepare-release:
+    name: Prepare GitHub Release
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    outputs:
+      release_id: ${{ steps.release.outputs.release_id }}
+    steps:
+      - name: Create or find prerelease
+        id: release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ github.ref_name }}
+          RELEASE_TITLE: Polyglot Lab ${{ github.ref_name }}
+          RELEASE_NOTES: |
+            ## Polyglot Lab Desktop Installers
+
+            The visual-to-code educational platform supporting **Rust, Go, Python, and C++**.
+
+            ### Downloads:
+            - **Windows**: `.msi` or `.exe` installer (x64)
+            - **macOS**: `.dmg` (Apple Silicon M-series)
+            - **Linux**: `.AppImage` (portable) or `.deb` (Ubuntu/Debian)
+
+            *No server required. Fully offline-capable.*
+        run: |
+          if ! gh release view "$TAG_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$TAG_NAME" \
+              --repo "$GITHUB_REPOSITORY" \
+              --verify-tag \
+              --prerelease \
+              --title "$RELEASE_TITLE" \
+              --notes "$RELEASE_NOTES"
+          fi
+          release_id="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG_NAME" --jq .id)"
+          echo "release_id=$release_id" >> "$GITHUB_OUTPUT"
+
   release:
     name: Build (${{ matrix.platform }})
+    needs: prepare-release
     permissions:
       contents: write
     strategy:
@@ -54,24 +91,10 @@ jobs:
           npm --prefix ui ci
           npm --prefix ui run build
 
-      - name: Build Tauri Desktop Application and Create Release
+      - name: Build Tauri Desktop Application and Upload Installers
         uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           projectPath: './src-tauri'
-          tagName: ${{ github.ref_name }}
-          releaseName: 'Polyglot Lab ${{ github.ref_name }}'
-          releaseBody: |
-            ## Polyglot Lab Desktop Installers
-
-            The visual-to-code educational platform supporting **Rust, Go, Python, and C++**.
-
-            ### Downloads:
-            - **Windows**: `.msi` or `.exe` installer (x64)
-            - **macOS**: `.dmg` (Apple Silicon M-series)
-            - **Linux**: `.AppImage` (portable) or `.deb` (Ubuntu/Debian)
-
-            *No server required. Fully offline-capable.*
-          releaseDraft: false
-          prerelease: true
+          releaseId: ${{ needs.prepare-release.outputs.release_id }}

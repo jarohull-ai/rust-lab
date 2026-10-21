@@ -20,7 +20,8 @@ must still provide clear migration notes.
 
 1. Merge the reviewed candidate into `polyglot-lab`.
 2. Create an annotated `vX.Y.Z` tag on the verified commit.
-3. Push the tag and create a GitHub Release from it.
+3. Push the tag. The release workflow creates one prerelease first, then passes its release ID to
+   every platform job so concurrent builds only upload their own assets.
 4. Mark 0.x releases as pre-releases while the public alpha/beta warning applies.
 5. Include user-visible changes, known limitations, verification results, and upgrade notes.
 

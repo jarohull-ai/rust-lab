@@ -1,4 +1,4 @@
-# API Specification: Rust Lab v0.4.2-alpha.3
+# API Specification: Rust Lab v0.4.2-alpha.4
 
 ## Overview
 This document defines the JSON structure used to describe a Rust Lab graph,
