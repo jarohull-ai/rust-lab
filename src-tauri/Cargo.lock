@@ -116,15 +116,17 @@ checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
 name = "api"
-version = "0.4.1-alpha.1"
+version = "0.4.2-alpha.2"
 dependencies = [
  "anyhow",
  "axum",
+ "getrandom 0.4.3",
  "lab-node-sdk",
  "reqwest 0.12.28",
  "runtime",
  "serde",
  "serde_json",
+ "subtle",
  "tokio",
  "tower-http 0.5.2",
  "tracing",
@@ -1328,8 +1330,6 @@ dependencies = [
 [[package]]
 name = "glib"
 version = "0.18.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "233daaf6e83ae6a12a52055f568f9d7cf4671dabb78ff9560ab6da230ce00ee5"
 dependencies = [
  "bitflags 2.13.2",
  "futures-channel",
@@ -1952,7 +1952,7 @@ dependencies = [
 
 [[package]]
 name = "lab-node-sdk"
-version = "0.4.1-alpha.1"
+version = "0.4.2-alpha.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2629,7 +2629,7 @@ dependencies = [
 
 [[package]]
 name = "polyglot-lab-desktop"
-version = "0.4.1-alpha.1"
+version = "0.4.2-alpha.2"
 dependencies = [
  "api",
  "axum",
@@ -3015,7 +3015,7 @@ dependencies = [
 
 [[package]]
 name = "runtime"
-version = "0.4.1-alpha.1"
+version = "0.4.2-alpha.2"
 dependencies = [
  "anyhow",
  "async-trait",

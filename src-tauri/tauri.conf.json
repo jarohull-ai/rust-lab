@@ -1,13 +1,14 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Polyglot Lab",
-  "version": "0.4.2",
+  "version": "0.4.2-alpha.2",
   "identifier": "ai.jarohull.polyglotlab",
   "build": {
     "frontendDist": "../ui/dist",
     "devUrl": "http://localhost:5173"
   },
   "app": {
+    "withGlobalTauri": true,
     "windows": [
       {
         "title": "Polyglot Lab — Visual to Code",
@@ -20,7 +21,7 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self' customprotocol: asset:; connect-src 'self' ipc: http://ipc.localhost http://127.0.0.1:*; img-src 'self' asset: http://asset.localhost data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; script-src 'self'"
     }
   },
   "bundle": {

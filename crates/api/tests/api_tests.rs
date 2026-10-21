@@ -10,9 +10,13 @@ use serde_json::{json, Value};
 use tower::ServiceExt;
 
 static LAB_TEST_SEQUENCE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+const TEST_API_TOKEN: &str = "test-token-which-is-at-least-thirty-two-bytes-long";
 
 fn build_router() -> axum::Router {
-    app(AppState::default())
+    app(AppState::new(
+        std::path::PathBuf::from("target/rust-lab-workspaces-tests"),
+        TEST_API_TOKEN.to_string(),
+    ))
 }
 
 fn build_lab_router() -> (axum::Router, std::path::PathBuf) {
@@ -20,10 +24,7 @@ fn build_lab_router() -> (axum::Router, std::path::PathBuf) {
     let root = std::path::PathBuf::from("target/rust-lab-api-tests")
         .join(format!("{}-{sequence}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
-    let state = AppState {
-        registry: std::sync::Arc::new(runtime::NodeRegistry::default()),
-        workspace_root: std::sync::Arc::new(root.clone()),
-    };
+    let state = AppState::new(root.clone(), TEST_API_TOKEN.to_string());
     (app(state), root)
 }
 
@@ -31,6 +32,8 @@ async fn get_json<T: DeserializeOwned>(router: axum::Router, path: &str) -> T {
     let req = Request::builder()
         .uri(path)
         .method(Method::GET)
+        .header("x-requested-with", "Polyglot-Lab")
+        .header("x-lab-token", TEST_API_TOKEN)
         .body(Body::empty())
         .unwrap();
 
@@ -50,6 +53,8 @@ async fn post_json<T: DeserializeOwned>(router: axum::Router, path: &str, payloa
         .uri(path)
         .method(Method::POST)
         .header(header::CONTENT_TYPE, "application/json")
+        .header("x-requested-with", "Polyglot-Lab")
+        .header("x-lab-token", TEST_API_TOKEN)
         .body(Body::from(serde_json::to_vec(&payload).unwrap()))
         .unwrap();
 
@@ -298,6 +303,8 @@ async fn export_disk_endpoint_rejects_paths_outside_export_workspace() {
         .uri("/api/export/disk")
         .method(Method::POST)
         .header(header::CONTENT_TYPE, "application/json")
+        .header("x-requested-with", "Polyglot-Lab")
+        .header("x-lab-token", TEST_API_TOKEN)
         .body(Body::from(serde_json::to_vec(&disk_req).unwrap()))
         .unwrap();
 
@@ -307,7 +314,7 @@ async fn export_disk_endpoint_rejects_paths_outside_export_workspace() {
 
 #[tokio::test]
 async fn tutor_hints_endpoint_returns_structured_contextual_hints() {
-    let router = app(AppState::default());
+    let router = build_router();
     let graph = json!({
         "graph_version": "0.1",
         "nodes": [
@@ -320,6 +327,8 @@ async fn tutor_hints_endpoint_returns_structured_contextual_hints() {
         .uri("/api/tutor/hints")
         .method(Method::POST)
         .header(header::CONTENT_TYPE, "application/json")
+        .header("x-requested-with", "Polyglot-Lab")
+        .header("x-lab-token", TEST_API_TOKEN)
         .body(Body::from(
             serde_json::to_vec(&json!({
                 "graph": graph,
@@ -442,22 +451,43 @@ async fn lab_workspace_runs_python_toolchain_action() {
     .await;
 
     // Run check (python3 -m py_compile main.py)
-    let res: api::CargoCommandResponse = post_json(
-        router.clone(),
-        "/api/lab/cargo",
-        json!({
-            "project_id": py_proj.id,
-            "action": "check",
-            "approved": true
-        }),
-    )
-    .await;
+    let request = Request::builder()
+        .uri("/api/lab/cargo")
+        .method(Method::POST)
+        .header(header::CONTENT_TYPE, "application/json")
+        .header("x-requested-with", "Polyglot-Lab")
+        .header("x-lab-token", TEST_API_TOKEN)
+        .body(Body::from(
+            serde_json::to_vec(&json!({
+                "project_id": py_proj.id,
+                "action": "check",
+                "approved": true
+            }))
+            .unwrap(),
+        ))
+        .unwrap();
+    let response = router.oneshot(request).await.unwrap();
 
-    assert!(res.success);
-    assert_eq!(
-        res.sandboxed,
-        res.sandbox.contains("bwrap") || res.sandbox.contains("docker")
-    );
+    if response.status() == StatusCode::OK {
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let result: api::CargoCommandResponse = serde_json::from_slice(&body).unwrap();
+        assert!(
+            result.success,
+            "sandbox={} stdout={} stderr={}",
+            result.sandbox, result.stdout, result.stderr
+        );
+        assert!(result.sandboxed);
+        assert!(result.sandbox.contains("bwrap") || result.sandbox.contains("docker"));
+    } else {
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let error: api::ErrorResponse = serde_json::from_slice(&body).unwrap();
+        assert!(
+            error.error.contains("sandbox") || error.error.contains("Docker"),
+            "unexpected fail-closed error: {}",
+            error.error
+        );
+    }
 
     let _ = std::fs::remove_dir_all(root);
 }
@@ -479,6 +509,33 @@ async fn cors_rejects_untrusted_origins() {
     assert!(allow_origin.is_none());
 
     let _ = std::fs::remove_dir_all(root);
+}
+
+#[tokio::test]
+async fn api_rejects_missing_or_invalid_session_headers() {
+    let router = build_router();
+
+    let missing = Request::builder()
+        .uri("/api/nodes")
+        .method(Method::GET)
+        .body(Body::empty())
+        .unwrap();
+    assert_eq!(
+        router.clone().oneshot(missing).await.unwrap().status(),
+        StatusCode::UNAUTHORIZED
+    );
+
+    let invalid = Request::builder()
+        .uri("/api/nodes")
+        .method(Method::GET)
+        .header("x-requested-with", "Polyglot-Lab")
+        .header("x-lab-token", "invalid-invalid-invalid-invalid-invalid")
+        .body(Body::empty())
+        .unwrap();
+    assert_eq!(
+        router.oneshot(invalid).await.unwrap().status(),
+        StatusCode::UNAUTHORIZED
+    );
 }
 
 #[tokio::test]
@@ -559,6 +616,8 @@ async fn post_json_with_method<T: DeserializeOwned>(
         .uri(path)
         .method(method)
         .header(header::CONTENT_TYPE, "application/json")
+        .header("x-requested-with", "Polyglot-Lab")
+        .header("x-lab-token", TEST_API_TOKEN)
         .body(Body::from(serde_json::to_vec(&payload).unwrap()))
         .unwrap();
     let response = router.oneshot(req).await.unwrap();
@@ -574,6 +633,8 @@ async fn lab_workspace_rejects_unsafe_imports_paths_and_unapproved_execution() {
         .uri("/api/lab/import/github")
         .method(Method::POST)
         .header(header::CONTENT_TYPE, "application/json")
+        .header("x-requested-with", "Polyglot-Lab")
+        .header("x-lab-token", TEST_API_TOKEN)
         .body(Body::from(
             serde_json::to_vec(&json!({ "url": "https://evil.example/project" })).unwrap(),
         ))
@@ -595,6 +656,8 @@ async fn lab_workspace_rejects_unsafe_imports_paths_and_unapproved_execution() {
             project.id
         ))
         .method(Method::GET)
+        .header("x-requested-with", "Polyglot-Lab")
+        .header("x-lab-token", TEST_API_TOKEN)
         .body(Body::empty())
         .unwrap();
     assert_eq!(
@@ -606,6 +669,8 @@ async fn lab_workspace_rejects_unsafe_imports_paths_and_unapproved_execution() {
         .uri("/api/lab/cargo")
         .method(Method::POST)
         .header(header::CONTENT_TYPE, "application/json")
+        .header("x-requested-with", "Polyglot-Lab")
+        .header("x-lab-token", TEST_API_TOKEN)
         .body(Body::from(
             serde_json::to_vec(&json!({
                 "project_id": project.id,

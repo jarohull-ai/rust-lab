@@ -1,6 +1,6 @@
 # Rust Lab security model
 
-Status: v0.3.0 public alpha candidate
+Status: v0.4.2-alpha.2 public alpha candidate
 
 ## Purpose
 
@@ -24,6 +24,11 @@ The local user, Rust Lab installation, configured execution policy, and supporte
 are inside the intended trust boundary. The host Docker daemon is highly privileged and is never
 made available to the Compose container.
 
+The desktop backend binds a fresh loopback port for every application instance. The Tauri command
+channel delivers a 256-bit random API token to that instance's UI; API requests also require the
+`X-Requested-With: Polyglot-Lab` marker. The browser-hosted build receives the token only in its
+same-origin HTML response. CORS remains defense in depth and is not treated as authentication.
+
 ## Graph execution controls
 
 - Graphs are structurally and semantically validated before execution.
@@ -33,18 +38,24 @@ made available to the Compose container.
 - Requests and execution have size and time limits.
 - Generated-project compile checks use offline Cargo.
 
-## Cargo Workspace controls
+## Workspace controls
 
 - Project IDs and paths are validated; symlinks and internal `.git`, `.cargo`, `target`, and
   `.rust-lab` paths are excluded from editor access.
 - Source editing is limited to an explicit text-file allowlist and a 512 KiB per-file limit.
 - Public repository imports are shallow, non-interactive HTTPS clones with size/file limits.
 - Every dependency modification and Cargo command requires an explicit UI confirmation.
-- Offline execution prefers Bubblewrap with namespace isolation and falls back to Docker.
+- Offline Rust, Go, Python, and C++ execution prefers Bubblewrap with namespace isolation and falls
+  back to Docker. Dependency Fetch is Docker-only because it requires network access.
+- Sandbox selection is fail-closed. If Bubblewrap cannot start and the required Docker image is not
+  already present, the API returns `503 Service Unavailable`; project code is never run directly on
+  the host.
 - Docker execution drops all capabilities, enables `no-new-privileges`, limits CPU, memory, PIDs,
   and time, uses a read-only root filesystem, and disables the network for execution.
-- Docker is configured with `--pull never`; commands cannot silently download a runner image. The
-  administrator must provision `rust:bookworm` explicitly.
+- Docker is configured with `--pull never`; commands cannot silently download a runner image. Rust
+  uses `rust:bookworm`. Go, Python, and C++ use digest-pinned `linux/amd64` images documented in
+  `docs/TROUBLESHOOTING.md`; alternative administrator-provided images require explicit environment
+  configuration.
 - Fetch is separated from execution. It has network access but uses a project-specific Cargo home,
   disables Cargo credential providers and external Git transport, and receives no host credentials.
 - Each Cargo result is appended to a local trajectory record.
@@ -69,4 +80,4 @@ Presence of an executable alone is not presented as readiness.
 - Produce signed release artifacts and a software bill of materials.
 - Add automated dependency policy and vulnerability review without making release builds depend on
   a live advisory service.
-- Perform a dedicated sandbox review before supporting additional host platforms.
+- Add signed first-party multi-architecture polyglot sandbox images.

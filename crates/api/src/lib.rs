@@ -1,8 +1,9 @@
-use axum::http::HeaderValue;
 use axum::{
+    body::Body,
     extract::{DefaultBodyLimit, State},
-    http::StatusCode,
-    response::Json,
+    http::{HeaderValue, Method, Request, StatusCode},
+    middleware::{self, Next},
+    response::{Html, IntoResponse, Json, Response},
     routing::{get, post},
     Router,
 };
@@ -13,6 +14,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
+use subtle::ConstantTimeEq;
 use tower_http::cors::CorsLayer;
 use tower_http::services::ServeDir;
 
@@ -29,15 +31,45 @@ static COMPILE_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 pub struct AppState {
     pub registry: Arc<NodeRegistry>,
     pub workspace_root: Arc<PathBuf>,
+    api_token: Arc<str>,
 }
 
 impl Default for AppState {
     fn default() -> Self {
+        Self::new(
+            PathBuf::from("target/rust-lab-workspaces"),
+            generate_api_token().expect("operating-system randomness is required for API security"),
+        )
+    }
+}
+
+impl AppState {
+    pub fn new(workspace_root: PathBuf, api_token: String) -> Self {
+        assert!(
+            api_token.len() >= 32,
+            "API token must contain at least 32 characters"
+        );
         Self {
             registry: Arc::new(NodeRegistry::default()),
-            workspace_root: Arc::new(PathBuf::from("target/rust-lab-workspaces")),
+            workspace_root: Arc::new(workspace_root),
+            api_token: Arc::from(api_token),
         }
     }
+
+    pub fn api_token(&self) -> &str {
+        &self.api_token
+    }
+}
+
+pub fn generate_api_token() -> Result<String, getrandom::Error> {
+    let mut bytes = [0_u8; 32];
+    getrandom::fill(&mut bytes)?;
+    let mut token = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        use std::fmt::Write as _;
+        write!(&mut token, "{byte:02x}").expect("writing to a String cannot fail");
+    }
+    Ok(token)
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -145,7 +177,9 @@ pub fn app(state: AppState) -> Router {
     router = workspace::routes(router);
 
     if Path::new("ui/dist").exists() {
-        router = router.fallback_service(ServeDir::new("ui/dist"));
+        router = router
+            .route("/", get(index_handler))
+            .fallback_service(ServeDir::new("ui/dist"));
     }
 
     let allowed_origins = [
@@ -176,7 +210,71 @@ pub fn app(state: AppState) -> Router {
     router
         .layer(DefaultBodyLimit::max(1_048_576))
         .layer(cors)
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            require_api_token,
+        ))
         .with_state(state)
+}
+
+async fn index_handler(State(state): State<AppState>) -> Result<Html<String>, StatusCode> {
+    let index = tokio::fs::read_to_string("ui/dist/index.html")
+        .await
+        .map_err(|_| StatusCode::NOT_FOUND)?;
+    let session_meta = format!(
+        "<meta name=\"rust-lab-token\" content=\"{}\">\n</head>",
+        escape_html_attribute(state.api_token())
+    );
+    Ok(Html(index.replacen("</head>", &session_meta, 1)))
+}
+
+fn escape_html_attribute(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('"', "&quot;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('\'', "&#39;")
+}
+
+async fn require_api_token(
+    State(state): State<AppState>,
+    request: Request<Body>,
+    next: Next,
+) -> Response {
+    let path = request.uri().path();
+    if request.method() == Method::OPTIONS || path == "/api/health" || !path.starts_with("/api/") {
+        return next.run(request).await;
+    }
+
+    let requested_with_valid = request
+        .headers()
+        .get("x-requested-with")
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|value| value == "Polyglot-Lab");
+    let token_valid = request
+        .headers()
+        .get("x-lab-token")
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|candidate| {
+            candidate.len() == state.api_token.len()
+                && candidate
+                    .as_bytes()
+                    .ct_eq(state.api_token.as_bytes())
+                    .into()
+        });
+
+    if !requested_with_valid || !token_valid {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(ErrorResponse {
+                error: "A valid local API session is required".to_string(),
+            }),
+        )
+            .into_response();
+    }
+
+    next.run(request).await
 }
 
 async fn health_handler() -> Json<HealthResponse> {
@@ -455,4 +553,17 @@ async fn tutor_hints_handler(
         progress: outcome.progress,
         learned_now: outcome.learned_now,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn session_token_is_safe_inside_the_html_meta_attribute() {
+        assert_eq!(
+            escape_html_attribute("token\"<&>'"),
+            "token&quot;&lt;&amp;&gt;&#39;"
+        );
+    }
 }

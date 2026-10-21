@@ -889,196 +889,285 @@ fn detect_project_target(root: &Path) -> lab_node_sdk::LanguageTarget {
 
 async fn run_polyglot_process(
     root: &Path,
+    cache: &Path,
     target: lab_node_sdk::LanguageTarget,
     action: CargoAction,
 ) -> Result<(std::process::Output, &'static str), ApiError> {
-    let (exe_name, args, friendly_lang): (&str, Vec<&str>, &str) = match (target, action) {
-        (lab_node_sdk::LanguageTarget::Go, CargoAction::Fetch) => ("go", vec!["mod", "tidy"], "Go"),
-        (lab_node_sdk::LanguageTarget::Go, CargoAction::Check) => {
-            ("go", vec!["build", "./..."], "Go")
-        }
-        (lab_node_sdk::LanguageTarget::Go, CargoAction::Test) => {
-            ("go", vec!["test", "./..."], "Go")
-        }
-        (lab_node_sdk::LanguageTarget::Go, CargoAction::Run) => ("go", vec!["run", "."], "Go"),
-        (lab_node_sdk::LanguageTarget::Go, CargoAction::Clippy) => {
-            ("go", vec!["vet", "./..."], "Go")
-        }
-        (lab_node_sdk::LanguageTarget::Go, CargoAction::Fmt) => ("gofmt", vec!["-w", "."], "Go"),
+    let (exe_name, args): (&str, Vec<&str>) = match (target, action) {
+        (lab_node_sdk::LanguageTarget::Go, CargoAction::Fetch) => ("go", vec!["mod", "tidy"]),
+        (lab_node_sdk::LanguageTarget::Go, CargoAction::Check) => ("go", vec!["build", "./..."]),
+        (lab_node_sdk::LanguageTarget::Go, CargoAction::Test) => ("go", vec!["test", "./..."]),
+        (lab_node_sdk::LanguageTarget::Go, CargoAction::Run) => ("go", vec!["run", "."]),
+        (lab_node_sdk::LanguageTarget::Go, CargoAction::Clippy) => ("go", vec!["vet", "./..."]),
+        (lab_node_sdk::LanguageTarget::Go, CargoAction::Fmt) => ("gofmt", vec!["-w", "."]),
 
         (lab_node_sdk::LanguageTarget::Python, CargoAction::Fetch) => (
             "python3",
-            vec!["-m", "pip", "install", "-r", "requirements.txt"],
-            "Python",
+            vec![
+                "-m",
+                "pip",
+                "install",
+                "--target",
+                "/tool-cache/python",
+                "-r",
+                "requirements.txt",
+            ],
         ),
         (lab_node_sdk::LanguageTarget::Python, CargoAction::Check) => {
-            ("python3", vec!["-m", "py_compile", "main.py"], "Python")
+            ("python3", vec!["-m", "py_compile", "main.py"])
         }
         (lab_node_sdk::LanguageTarget::Python, CargoAction::Test) => {
-            ("python3", vec!["-m", "unittest"], "Python")
+            ("python3", vec!["-m", "unittest"])
         }
-        (lab_node_sdk::LanguageTarget::Python, CargoAction::Run) => {
-            ("python3", vec!["main.py"], "Python")
-        }
+        (lab_node_sdk::LanguageTarget::Python, CargoAction::Run) => ("python3", vec!["main.py"]),
         (lab_node_sdk::LanguageTarget::Python, CargoAction::Clippy) => {
-            ("python3", vec!["-m", "py_compile", "main.py"], "Python")
+            ("python3", vec!["-m", "py_compile", "main.py"])
         }
         (lab_node_sdk::LanguageTarget::Python, CargoAction::Fmt) => {
-            ("python3", vec!["-m", "py_compile", "main.py"], "Python")
+            ("python3", vec!["-m", "py_compile", "main.py"])
         }
 
         (lab_node_sdk::LanguageTarget::Cpp, CargoAction::Fetch) => {
-            ("cmake", vec!["-B", "build"], "C++")
+            ("cmake", vec!["-S", ".", "-B", "build"])
         }
         (lab_node_sdk::LanguageTarget::Cpp, CargoAction::Check) => {
-            ("cmake", vec!["--build", "build"], "C++")
+            ("cmake", vec!["--build", "build"])
         }
         (lab_node_sdk::LanguageTarget::Cpp, CargoAction::Test) => {
-            ("ctest", vec!["--test-dir", "build"], "C++")
+            ("ctest", vec!["--test-dir", "build"])
         }
         (lab_node_sdk::LanguageTarget::Cpp, CargoAction::Run) => {
-            ("cmake", vec!["--build", "build"], "C++")
+            ("cmake", vec!["--build", "build"])
         }
         (lab_node_sdk::LanguageTarget::Cpp, CargoAction::Clippy) => {
-            ("cmake", vec!["--build", "build"], "C++")
+            ("cmake", vec!["--build", "build"])
         }
         (lab_node_sdk::LanguageTarget::Cpp, CargoAction::Fmt) => {
-            ("cmake", vec!["--build", "build"], "C++")
+            ("cmake", vec!["--build", "build"])
         }
 
         _ => unreachable!(),
     };
 
-    let bin_path = find_executable(exe_name);
-    let Some(bin) = bin_path else {
-        #[cfg(unix)]
-        use std::os::unix::process::ExitStatusExt;
-        #[cfg(windows)]
-        use std::os::windows::process::ExitStatusExt;
-
-        #[cfg(unix)]
-        let status = std::process::ExitStatus::from_raw(1 << 8);
-        #[cfg(windows)]
-        let status = std::process::ExitStatus::from_raw(1);
-
-        let err_msg = format!(
-            "Toolchain binary '{exe_name}' not found on host.\nPlease install {friendly_lang} on your system to execute this action.\n"
-        );
-        let output = std::process::Output {
-            status,
-            stdout: Vec::new(),
-            stderr: err_msg.into_bytes(),
-        };
-        return Ok((output, "system-check"));
-    };
-
+    // Dependency acquisition needs network access and is therefore Docker-only.
+    // Offline actions may use Bubblewrap when the host toolchain is available.
     let bwrap = Path::new("/usr/bin/bwrap");
-    if bwrap.is_file() {
-        let mut cmd = limited_bwrap_command(bwrap);
-        cmd.args([
-            "--unshare-all",
-            "--die-with-parent",
-            "--new-session",
-            "--clearenv",
-            "--proc",
-            "/proc",
-            "--dev",
-            "/dev",
-            "--tmpfs",
-            "/tmp",
-            "--ro-bind",
-            "/usr",
-            "/usr",
-            "--ro-bind",
-            "/etc",
-            "/etc",
-            "--dir",
-            "/workspace",
-            "--bind",
-        ]);
-        cmd.arg(root).arg("/workspace");
-        cmd.args([
-            "--setenv",
-            "HOME",
-            "/tmp",
-            "--setenv",
-            "PATH",
-            "/usr/bin:/bin:/usr/local/bin",
-        ]);
-        for system_path in ["/bin", "/lib", "/lib64"] {
-            if Path::new(system_path).exists() {
-                cmd.args(["--ro-bind", system_path, system_path]);
-            }
-        }
-        cmd.arg("--chdir").arg("/workspace");
-        cmd.arg(&bin);
-        cmd.args(&args);
-        cmd.kill_on_drop(true);
-
-        if let Ok(Ok(output)) = tokio::time::timeout(Duration::from_secs(30), cmd.output()).await {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            if output.status.success() || !stderr.starts_with("bwrap:") {
-                return Ok((output, "bwrap-sandbox"));
-            }
-        }
-    }
-
-    // Attempt Docker isolation if available on the system
-    if let Some(docker) = find_executable("docker") {
-        let docker_image = match target {
-            lab_node_sdk::LanguageTarget::Python => Some("python:3.12-slim"),
-            _ => None,
-        };
-        if let Some(image) = docker_image {
-            let mut dcmd = tokio::process::Command::new(&docker);
-            dcmd.args(["run", "--rm"]);
-            if action != CargoAction::Fetch {
-                dcmd.args(["--network", "none"]);
-            }
-            dcmd.args([
-                "--cap-drop",
-                "ALL",
-                "--security-opt",
-                "no-new-privileges",
-                "--memory",
-                "2g",
-                "--cpus",
-                "2",
+    if action != CargoAction::Fetch && bwrap.is_file() {
+        let bin = find_executable(exe_name);
+        if let Some(bin) = bin {
+            let mut cmd = limited_bwrap_command(bwrap);
+            cmd.args([
+                "--unshare-all",
+                "--die-with-parent",
+                "--new-session",
+                "--clearenv",
+                "--proc",
+                "/proc",
+                "--dev",
+                "/dev",
+                "--tmpfs",
+                "/tmp",
+                "--ro-bind",
+                "/usr",
+                "/usr",
+                "--ro-bind",
+                "/etc",
+                "/etc",
+                "--dir",
+                "/workspace",
+                "--dir",
+                "/tool-cache",
+                "--bind",
             ]);
-            dcmd.arg("-v").arg(format!("{}:/workspace", root.display()));
-            dcmd.arg("-w").arg("/workspace");
-            dcmd.arg(image);
-            dcmd.arg(exe_name);
-            dcmd.args(&args);
-            dcmd.kill_on_drop(true);
+            cmd.arg(root).arg("/workspace");
+            cmd.arg("--bind").arg(cache).arg("/tool-cache");
+            cmd.args([
+                "--setenv",
+                "HOME",
+                "/tmp",
+                "--setenv",
+                "PATH",
+                "/usr/bin:/bin:/usr/local/bin",
+                "--setenv",
+                "GOMODCACHE",
+                "/tool-cache/go-mod",
+                "--setenv",
+                "GOCACHE",
+                "/tool-cache/go-build",
+                "--setenv",
+                "PYTHONPATH",
+                "/tool-cache/python",
+            ]);
+            for system_path in ["/bin", "/lib", "/lib64"] {
+                if Path::new(system_path).exists() {
+                    cmd.args(["--ro-bind", system_path, system_path]);
+                }
+            }
+            cmd.arg("--chdir").arg("/workspace");
+            cmd.arg(&bin);
+            cmd.args(&args);
+            cmd.kill_on_drop(true);
 
-            if let Ok(Ok(output)) =
-                tokio::time::timeout(Duration::from_secs(30), dcmd.output()).await
-            {
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                if output.status.success() || !stderr.contains("Unable to find image") {
-                    return Ok((output, "docker-sandbox"));
+            match tokio::time::timeout(Duration::from_secs(45), cmd.output()).await {
+                Ok(Ok(output)) => {
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    if output.status.success() || !stderr.starts_with("bwrap:") {
+                        return Ok((output, "bwrap-sandbox"));
+                    }
+                }
+                Ok(Err(_)) => {}
+                Err(_) => {
+                    return Err(api_error(
+                        StatusCode::REQUEST_TIMEOUT,
+                        "Bubblewrap command exceeded the 45 second Lab limit",
+                    ));
                 }
             }
         }
     }
 
-    let mut cmd = tokio::process::Command::new(bin);
-    cmd.current_dir(root);
-    cmd.args(args);
-    cmd.kill_on_drop(true);
+    docker_polyglot(root, cache, target, action, exe_name, &args).await
+}
 
-    let output = tokio::time::timeout(Duration::from_secs(30), cmd.output())
-        .await
-        .map_err(|_| {
-            api_error(
-                StatusCode::GATEWAY_TIMEOUT,
-                "Execution timed out (30s limit)",
+fn polyglot_docker_image(target: lab_node_sdk::LanguageTarget) -> (&'static str, &'static str) {
+    match target {
+        lab_node_sdk::LanguageTarget::Go => (
+            "RUST_LAB_GO_IMAGE",
+            "golang:1.25-bookworm@sha256:c268a04d59aea0b180ed9946a658cfab9e7b3391dc90eed6e4969ccff98c851f",
+        ),
+        lab_node_sdk::LanguageTarget::Python => {
+            (
+                "RUST_LAB_PYTHON_IMAGE",
+                "python:3.12-slim-bookworm@sha256:2ed6491b93cd49272ee6de2b5a38440c3448360322c089fc23e370722d74179d",
             )
-        })?
-        .map_err(|err| api_error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?;
+        }
+        lab_node_sdk::LanguageTarget::Cpp => (
+            "RUST_LAB_CPP_IMAGE",
+            "dockcross/linux-x64@sha256:552d7f84b9978bd9cbd8a1b1e2ad40963ff135750b2c21311686b1b31bafd184",
+        ),
+        _ => unreachable!(),
+    }
+}
 
-    Ok((output, "host-unsandboxed"))
+async fn docker_polyglot(
+    root: &Path,
+    cache: &Path,
+    target: lab_node_sdk::LanguageTarget,
+    action: CargoAction,
+    exe_name: &str,
+    args: &[&str],
+) -> Result<(std::process::Output, &'static str), ApiError> {
+    let docker = find_executable("docker").ok_or_else(|| {
+        api_error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "No supported polyglot sandbox is available; project code was not executed",
+        )
+    })?;
+    let (image_env, default_image) = polyglot_docker_image(target);
+    let image = std::env::var(image_env).unwrap_or_else(|_| default_image.to_string());
+    let platform =
+        std::env::var("RUST_LAB_DOCKER_PLATFORM").unwrap_or_else(|_| "linux/amd64".to_string());
+    let uid = numeric_identity("-u").unwrap_or_else(|| "1000".to_string());
+    let gid = numeric_identity("-g").unwrap_or_else(|| "1000".to_string());
+
+    let mut inspect = tokio::process::Command::new(&docker);
+    inspect
+        .args(["image", "inspect"])
+        .arg(&image)
+        .stdin(Stdio::null())
+        .kill_on_drop(true);
+    match tokio::time::timeout(Duration::from_secs(5), inspect.output()).await {
+        Ok(Ok(output)) if output.status.success() => {}
+        Ok(Ok(output)) => {
+            return Err(api_error(
+                StatusCode::SERVICE_UNAVAILABLE,
+                format!(
+                    "The required polyglot sandbox image is unavailable: {}",
+                    bounded_output(&output.stderr)
+                ),
+            ));
+        }
+        Ok(Err(err)) => {
+            return Err(api_error(
+                StatusCode::SERVICE_UNAVAILABLE,
+                format!("Could not inspect the Docker polyglot sandbox: {err}"),
+            ));
+        }
+        Err(_) => {
+            return Err(api_error(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "Docker did not answer the polyglot sandbox readiness check",
+            ));
+        }
+    }
+
+    let mut command = tokio::process::Command::new(docker);
+    command.args(["run", "--rm", "--pull", "never", "--platform"]);
+    command.arg(platform);
+    if action != CargoAction::Fetch {
+        command.args(["--network", "none"]);
+    }
+    command.args([
+        "--memory",
+        "2g",
+        "--cpus",
+        "2",
+        "--pids-limit",
+        "128",
+        "--cap-drop",
+        "ALL",
+        "--security-opt",
+        "no-new-privileges",
+        "--read-only",
+        "--tmpfs",
+        "/tmp:rw,noexec,nosuid,size=64m",
+        "--user",
+    ]);
+    command.arg(format!("{uid}:{gid}"));
+    command
+        .arg("--mount")
+        .arg(format!("type=bind,src={},dst=/workspace", root.display()));
+    command
+        .arg("--mount")
+        .arg(format!("type=bind,src={},dst=/tool-cache", cache.display()));
+    command.args([
+        "-e",
+        "HOME=/tmp",
+        "-e",
+        "GOMODCACHE=/tool-cache/go-mod",
+        "-e",
+        "GOCACHE=/tool-cache/go-build",
+        "-e",
+        "PYTHONPATH=/tool-cache/python",
+        "-w",
+        "/workspace",
+    ]);
+    command.arg(image);
+    command.arg(exe_name);
+    command.args(args).stdin(Stdio::null()).kill_on_drop(true);
+
+    match tokio::time::timeout(Duration::from_secs(45), command.output()).await {
+        Ok(Ok(output)) => {
+            if output.status.code() == Some(125) {
+                return Err(api_error(
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    format!(
+                        "Docker could not start the polyglot sandbox: {}",
+                        bounded_output(&output.stderr)
+                    ),
+                ));
+            }
+            Ok((output, "docker-sandbox"))
+        }
+        Ok(Err(err)) => Err(api_error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            format!("Could not start Docker polyglot sandbox: {err}"),
+        )),
+        Err(_) => Err(api_error(
+            StatusCode::REQUEST_TIMEOUT,
+            "Docker polyglot command exceeded the 45 second Lab limit",
+        )),
+    }
 }
 
 async fn run_cargo(
@@ -1102,10 +1191,18 @@ async fn run_cargo(
     let cache = cache
         .canonicalize()
         .map_err(|err| api_error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?;
+    let polyglot_cache = slot.join("polyglot-cache");
+    for directory in ["go-mod", "go-build", "python"] {
+        fs::create_dir_all(polyglot_cache.join(directory))
+            .map_err(|err| api_error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?;
+    }
+    let polyglot_cache = polyglot_cache
+        .canonicalize()
+        .map_err(|err| api_error(StatusCode::INTERNAL_SERVER_ERROR, err.to_string()))?;
     let started = Instant::now();
     let target = detect_project_target(&root);
     let (output, sandbox) = if target != lab_node_sdk::LanguageTarget::Rust {
-        run_polyglot_process(&root, target, request.action).await?
+        run_polyglot_process(&root, &polyglot_cache, target, request.action).await?
     } else if matches!(request.action, CargoAction::Fetch) {
         docker_cargo(&root, &cache, request.action.args(), true, true).await?
     } else {

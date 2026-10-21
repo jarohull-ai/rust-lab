@@ -25,9 +25,10 @@ remediation, release timing, and disclosure with the reporter.
 
 ## Deployment warning
 
-Rust Lab v0.3.0 is designed as a local, single-user application. It executes untrusted Rust only
-through its documented sandbox paths, but it is **not** a multi-tenant remote code execution
-service. Keep the default loopback binding. Do not expose it to the public internet.
+Rust Lab v0.4.2-alpha.2 is designed as a local, single-user application. It executes untrusted
+Rust, Go, Python, and C++ only through its documented fail-closed sandbox paths, but it is **not** a
+multi-tenant remote code execution service. Keep the default loopback binding. Do not expose it to
+the public internet.
 
 Do not mount the host Docker socket into the Rust Lab Compose container. Access to that socket is
 effectively host-level control and is outside the supported security model.

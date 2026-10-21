@@ -4,10 +4,10 @@ use anyhow::Result;
 use lab_node_sdk::GraphSpec;
 use std::collections::{HashMap, HashSet};
 
-/// Generates `CMakeLists.txt` content.
-pub fn generate_cmake_lists(project_name: &str) -> String {
+/// Generates `CMakeLists.txt` content with only the dependencies required by the graph.
+pub fn generate_cmake_lists(project_name: &str, used_kinds: &HashSet<&str>) -> String {
     let safe_name = crate::codegen::sanitize_ident(project_name);
-    format!(
+    let mut cmake = format!(
         r#"cmake_minimum_required(VERSION 3.20)
 project({safe_name} CXX)
 
@@ -18,7 +18,27 @@ include_directories(include)
 
 add_executable({safe_name} src/main.cpp)
 "#
-    )
+    );
+    if used_kinds.contains("http_get") {
+        cmake.push_str(&format!(
+            "find_package(CURL REQUIRED)\ntarget_link_libraries({safe_name} PRIVATE CURL::libcurl)\n"
+        ));
+    }
+    if used_kinds.contains("json_parse") {
+        cmake.push_str(&format!(
+            r#"include(FetchContent)
+FetchContent_Declare(
+  nlohmann_json
+  GIT_REPOSITORY https://github.com/nlohmann/json.git
+  GIT_TAG 9cca280a4d0ccf0c08f47a99aa71d1b0e52f8d03
+  GIT_SHALLOW FALSE
+)
+FetchContent_MakeAvailable(nlohmann_json)
+target_link_libraries({safe_name} PRIVATE nlohmann_json::nlohmann_json)
+"#
+        ));
+    }
+    cmake
 }
 
 /// Generates `include/nodes.hpp` with self-contained implementations of atomic nodes.
@@ -36,11 +56,15 @@ pub fn generate_nodes_hpp(used_kinds: &HashSet<&str>) -> String {
 #include <algorithm>
 #include <cctype>
 #include <stdexcept>
-
-namespace nodes {
-
 "#,
     );
+    if used_kinds.contains("http_get") {
+        code.push_str("#include <curl/curl.h>\n");
+    }
+    if used_kinds.contains("json_parse") {
+        code.push_str("#include <nlohmann/json.hpp>\n");
+    }
+    code.push_str("\nnamespace nodes {\n\n");
 
     if used_kinds.contains("fs_read") {
         code.push_str(
@@ -137,20 +161,38 @@ inline void log_output(const T& text) {
 
     if used_kinds.contains("http_get") {
         code.push_str(
-            r#"inline std::string http_get(const std::string& url) {
+            r#"inline size_t curl_write_callback(char* data, size_t size, size_t count, void* target) {
+    const size_t bytes = size * count;
+    static_cast<std::string*>(target)->append(data, bytes);
+    return bytes;
+}
+
+inline std::string http_get(const std::string& url) {
     std::cout << "   HTTP GET: " << url << "\n";
-    std::string cmd = "curl -s -L \"" + url + "\"";
-    FILE* pipe = popen(cmd.c_str(), "r");
-    if (!pipe) {
-        throw std::runtime_error("Failed to execute curl: " + url);
+    CURL* handle = curl_easy_init();
+    if (handle == nullptr) {
+        throw std::runtime_error("Could not initialize libcurl");
     }
-    char buffer[256];
-    std::string result = "";
-    while (fgets(buffer, sizeof(buffer), pipe) != NULL) {
-        result += buffer;
+    std::string body;
+    curl_easy_setopt(handle, CURLOPT_URL, url.c_str());
+    curl_easy_setopt(handle, CURLOPT_FOLLOWLOCATION, 1L);
+    curl_easy_setopt(handle, CURLOPT_MAXREDIRS, 5L);
+    curl_easy_setopt(handle, CURLOPT_CONNECTTIMEOUT_MS, 5000L);
+    curl_easy_setopt(handle, CURLOPT_TIMEOUT_MS, 15000L);
+    curl_easy_setopt(handle, CURLOPT_USERAGENT, "Polyglot-Lab/0.4");
+    curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, curl_write_callback);
+    curl_easy_setopt(handle, CURLOPT_WRITEDATA, &body);
+    const CURLcode result = curl_easy_perform(handle);
+    long status = 0;
+    curl_easy_getinfo(handle, CURLINFO_RESPONSE_CODE, &status);
+    curl_easy_cleanup(handle);
+    if (result != CURLE_OK) {
+        throw std::runtime_error(std::string("HTTP request failed: ") + curl_easy_strerror(result));
     }
-    pclose(pipe);
-    return result;
+    if (status < 200 || status >= 300) {
+        throw std::runtime_error("HTTP request returned status " + std::to_string(status));
+    }
+    return body;
 }
 
 "#,
@@ -160,35 +202,27 @@ inline void log_output(const T& text) {
     if used_kinds.contains("json_parse") {
         code.push_str(
             r#"inline std::string json_parse(const std::string& json_str, const std::string& path = "") {
-    if (path.empty()) {
-        return json_str;
-    }
-    std::string target = "\"" + path + "\"";
-    size_t pos = json_str.find(target);
-    if (pos == std::string::npos) {
-        return "";
-    }
-    size_t colon = json_str.find(':', pos + target.size());
-    if (colon == std::string::npos) {
-        return "";
-    }
-    size_t start = json_str.find_first_not_of(" \t\r\n", colon + 1);
-    if (start == std::string::npos) {
-        return "";
-    }
-    if (json_str[start] == '"') {
-        size_t end = json_str.find('"', start + 1);
-        if (end != std::string::npos) {
-            return json_str.substr(start + 1, end - start - 1);
+    nlohmann::json current = nlohmann::json::parse(json_str);
+    std::stringstream segments(path);
+    std::string segment;
+    while (std::getline(segments, segment, '.')) {
+        if (segment.empty()) {
+            continue;
         }
-    } else {
-        size_t end = json_str.find_first_of(",}\n\r", start);
-        if (end != std::string::npos) {
-            return json_str.substr(start, end - start);
+        if (current.is_array()) {
+            size_t consumed = 0;
+            const size_t index = std::stoul(segment, &consumed);
+            if (consumed != segment.size() || index >= current.size()) {
+                throw std::out_of_range("JSON array path segment not found: " + segment);
+            }
+            current = current.at(index);
+        } else if (current.is_object() && current.contains(segment)) {
+            current = current.at(segment);
+        } else {
+            throw std::out_of_range("JSON path segment not found: " + segment);
         }
-        return json_str.substr(start);
     }
-    return "";
+    return current.is_string() ? current.get<std::string>() : current.dump();
 }
 
 "#,
