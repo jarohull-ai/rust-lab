@@ -1,11 +1,13 @@
 # Release process
 
-Rust Lab releases are cut from `main`. Versions below 1.0 may change project and API formats, but
+Rust Lab releases are cut from `polyglot-lab`. Versions below 1.0 may change project and API formats, but
 must still provide clear migration notes.
 
 ## Candidate gate
 
-1. Update versions in the workspace and UI package.
+1. Update versions in the workspace and UI package. Keep `src-tauri/tauri.conf.json` at the numeric
+   `MAJOR.MINOR.PATCH` product version: MSI and RPM reject textual prerelease identifiers. The Git
+   tag and GitHub prerelease carry the `-alpha.N` suffix.
 2. Move relevant changelog entries from `Unreleased` into a dated version section.
 3. Run `./scripts/verify.sh` from a clean checkout.
 4. Run a local smoke test for Graph execution, Cargo export, project creation, sandbox capability
@@ -16,7 +18,7 @@ must still provide clear migration notes.
 
 ## Publishing
 
-1. Merge the reviewed candidate into `main`.
+1. Merge the reviewed candidate into `polyglot-lab`.
 2. Create an annotated `vX.Y.Z` tag on the verified commit.
 3. Push the tag and create a GitHub Release from it.
 4. Mark 0.x releases as pre-releases while the public alpha/beta warning applies.

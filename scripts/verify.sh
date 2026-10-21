@@ -23,4 +23,8 @@ if rg -n 'uses: [^#[:space:]]+@(v[0-9]+|stable|main|master)([[:space:]]|$)' .git
 fi
 rg -q 'let mut p: \*mut libc::c_char' vendor/glib-0.18.5-rustlab/src/variant_iter.rs
 rg -q '&mut p,' vendor/glib-0.18.5-rustlab/src/variant_iter.rs
+if ! rg -q '^  "version": "[0-9]+\.[0-9]+\.[0-9]+",$' src-tauri/tauri.conf.json; then
+  echo "Tauri installer version must be numeric MAJOR.MINOR.PATCH for MSI/RPM compatibility." >&2
+  exit 1
+fi
 git diff --check
