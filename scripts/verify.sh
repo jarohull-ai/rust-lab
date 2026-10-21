@@ -27,4 +27,10 @@ if ! rg -q '^  "version": "[0-9]+\.[0-9]+\.[0-9]+",$' src-tauri/tauri.conf.json;
   echo "Tauri installer version must be numeric MAJOR.MINOR.PATCH for MSI/RPM compatibility." >&2
   exit 1
 fi
+rg -q '^  prepare-release:$' .github/workflows/release.yml
+rg -q 'releaseId: \$\{\{ needs\.prepare-release\.outputs\.release_id \}\}' .github/workflows/release.yml
+if rg -n '^          tagName:' .github/workflows/release.yml; then
+  echo "Matrix jobs must upload through the prepared release ID instead of racing to create a tag release." >&2
+  exit 1
+fi
 git diff --check

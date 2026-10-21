@@ -25,7 +25,7 @@ remediation, release timing, and disclosure with the reporter.
 
 ## Deployment warning
 
-Rust Lab v0.4.2-alpha.3 is designed as a local, single-user application. It executes untrusted
+Rust Lab v0.4.2-alpha.4 is designed as a local, single-user application. It executes untrusted
 Rust, Go, Python, and C++ only through its documented fail-closed sandbox paths, but it is **not** a
 multi-tenant remote code execution service. Keep the default loopback binding. Do not expose it to
 the public internet.

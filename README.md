@@ -41,7 +41,7 @@ No account, cloud service, API key, or LLM is required for the learning experien
 | Go/Python/C++ execution | Bubblewrap with the host toolchain or the digest-pinned Docker images listed in [Troubleshooting](docs/TROUBLESHOOTING.md) |
 | Public GitHub import and crates.io search | Internet connection |
 
-Linux, Windows, and macOS are supported host platforms for Polyglot Lab v0.4.2-alpha.3. Standalone desktop installers (.exe, .msi, .dmg, .AppImage, .deb) package the native UI and backend; executing projects still requires Bubblewrap or pre-pulled sandbox images in a running Docker service.
+Linux, Windows, and macOS are supported host platforms for Polyglot Lab v0.4.2-alpha.4. Standalone desktop installers (.exe, .msi, .dmg, .AppImage, .deb) package the native UI and backend; executing projects still requires Bubblewrap or pre-pulled sandbox images in a running Docker service.
 
 From a fresh checkout:
 
