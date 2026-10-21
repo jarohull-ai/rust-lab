@@ -1,6 +1,6 @@
 [package]
 name = "polyglot-lab-desktop"
-version = "0.4.2-alpha.2"
+version = "0.4.2-alpha.3"
 description = "Polyglot Lab Desktop Application"
 authors = ["Rust Lab Contributors"]
 license = "MIT OR Apache-2.0"

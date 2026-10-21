@@ -1,6 +1,6 @@
 # Rust Lab security model
 
-Status: v0.4.2-alpha.2 public alpha candidate
+Status: v0.4.2-alpha.3 public alpha candidate
 
 ## Purpose
 

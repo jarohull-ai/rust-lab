@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.4.2-alpha.3] - 2026-10-21
+
+### Security
+- Added per-launch local API session authentication and enforced loopback-only binding.
+- Made Rust, Go, Python, and C++ execution fail closed when no real sandbox is available.
+- Pinned polyglot container images and GitHub Actions to immutable digests or commits.
+- Backported the `glib` iterator fix for RUSTSEC-2024-0429 and updated affected TLS roots.
+
+### Fixed
+- Replaced shell-based C++ HTTP and JSON helpers with libcurl and nlohmann/json.
+- Kept installer metadata numeric so Windows MSI and Linux RPM bundles accept prerelease builds;
+  the Git tag and GitHub release remain explicitly marked as prerelease.
+
 ## [0.4.0-alpha.1] - 2026-10-20
 
 Polyglot Engine evolution: multi-language visual-to-code architecture.
