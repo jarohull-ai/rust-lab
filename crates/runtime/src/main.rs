@@ -50,23 +50,24 @@ async fn main() -> Result<()> {
             .unwrap_or("rust_lab_app");
         let safe_name = codegen::sanitize_ident(project_name);
         codegen::export_project(&graph, out_dir, &safe_name)?;
-        println!("🎉 Project successfully generated in: {}", out_dir.display());
+        println!(
+            "🎉 Project successfully generated in: {}",
+            out_dir.display()
+        );
         println!("👉 To build and run:");
         println!("   cd {} && cargo run", out_dir.display());
         return Ok(());
     }
 
     // 4. Execution
-    let mut policy = runtime::SeedPolicy::default_safe();
-    if let Some(sec) = &graph.security {
-        if let Ok(extra) = serde_json::from_value::<runtime::SeedPolicy>(sec.clone()) {
-            policy.merge_with(&extra);
-        }
-    }
+    let mut policy = runtime::ExecutionPolicy::default_safe();
     policy.from_env();
 
     let executor = Executor::new(registry);
-    println!("Starting Rust Lab Runtime v0.0.2 with SEED Policy Guard...");
+    println!(
+        "Starting Rust Lab Runtime v{}...",
+        env!("CARGO_PKG_VERSION")
+    );
     let report = executor.execute_with_policy(graph, &policy).await?;
     println!(
         "Execution finished successfully! ({} executed, {} skipped)",

@@ -85,11 +85,11 @@ impl<'a> Validator<'a> {
             if let Some(map) = config_map {
                 for (key, val) in map {
                     let key_lower = key.to_lowercase();
-                    if let Some(pin) = spec
-                        .inputs
-                        .iter()
-                        .find(|p| p.name.to_lowercase() == key_lower || (p.name == "path" && (key_lower == "file_path" || key_lower == "filepath")))
-                    {
+                    if let Some(pin) = spec.inputs.iter().find(|p| {
+                        p.name.to_lowercase() == key_lower
+                            || (p.name == "path"
+                                && (key_lower == "file_path" || key_lower == "filepath"))
+                    }) {
                         if !pin.pin_type.matches_value(val) {
                             return Err(anyhow!(
                                 "Config type mismatch on node '{}', pin '{}': expected {}, got {}",
@@ -109,7 +109,9 @@ impl<'a> Validator<'a> {
                 let has_incoming_edge = graph.edges.iter().any(|e| {
                     e.to.node == node.id
                         && (e.to.port.to_lowercase() == pin_lower
-                            || (pin.name == "path" && (e.to.port.to_lowercase() == "file_path" || e.to.port.to_lowercase() == "filepath")))
+                            || (pin.name == "path"
+                                && (e.to.port.to_lowercase() == "file_path"
+                                    || e.to.port.to_lowercase() == "filepath")))
                 });
 
                 let has_valid_config = config_map.is_some_and(|map| {
@@ -321,7 +323,12 @@ mod tests {
         }))
         .unwrap_err()
         .to_string();
-        assert!(invalid_bool.contains("Config type mismatch on node 'check', pin 'value': expected boolean, got string"), "{invalid_bool}");
+        assert!(
+            invalid_bool.contains(
+                "Config type mismatch on node 'check', pin 'value': expected boolean, got string"
+            ),
+            "{invalid_bool}"
+        );
 
         // number does NOT match string
         let invalid_string = validate(json!({
@@ -333,7 +340,12 @@ mod tests {
         }))
         .unwrap_err()
         .to_string();
-        assert!(invalid_string.contains("Config type mismatch on node 'get', pin 'url': expected string, got number"), "{invalid_string}");
+        assert!(
+            invalid_string.contains(
+                "Config type mismatch on node 'get', pin 'url': expected string, got number"
+            ),
+            "{invalid_string}"
+        );
     }
 
     #[test]
@@ -405,4 +417,3 @@ mod tests {
         assert!(res.is_ok());
     }
 }
-

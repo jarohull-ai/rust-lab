@@ -45,6 +45,15 @@ export interface GraphSpec {
   graph_version: string;
   nodes: NodeInstance[];
   edges: EdgeSpec[];
+  security?: Record<string, unknown>;
+}
+
+export interface RustLabProject {
+  format: 'rust-lab-project';
+  version: 1;
+  name: string;
+  graph: GraphSpec;
+  layout: Record<string, { x: number; y: number }>;
 }
 
 export interface ValidateResponse {
@@ -64,6 +73,70 @@ export interface ExportResponse {
   cargo_toml: string;
   main_rs: string;
   nodes_rs: string;
+}
+
+export interface CompileResponse {
+  success: boolean;
+  stdout: string;
+  stderr: string;
+}
+
+export interface LabProject {
+  id: string;
+  name: string;
+  source: string;
+  created_at: number;
+}
+
+export interface WorkspaceEntry {
+  path: string;
+  kind: 'file' | 'directory';
+  size: number;
+}
+
+export interface WorkspaceTree {
+  project: LabProject;
+  entries: WorkspaceEntry[];
+}
+
+export interface LabFile {
+  project_id: string;
+  path: string;
+  content: string;
+}
+
+export interface CargoCommandResponse {
+  success: boolean;
+  action: 'fetch' | 'check' | 'test' | 'run' | 'clippy' | 'fmt';
+  stdout: string;
+  stderr: string;
+  duration_ms: number;
+  sandboxed: boolean;
+  sandbox: string;
+}
+
+export interface SandboxCapabilities {
+  offline_execution_available: boolean;
+  dependency_fetch_available: boolean;
+  cargo_detected: boolean;
+  bubblewrap_ready: boolean;
+  docker_ready: boolean;
+  preferred_backend: 'bubblewrap' | 'docker' | null;
+}
+
+export interface CrateSummary {
+  name: string;
+  max_version: string;
+  description: string;
+  downloads: number;
+}
+
+export interface UiLog {
+  id: number;
+  timestamp: number;
+  icon: string;
+  key: string;
+  params?: Record<string, string | number>;
 }
 
 export const PIN_COLORS: Record<PinType, { bg: string; border: string; text: string; hex: string }> = {

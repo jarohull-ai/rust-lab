@@ -19,7 +19,9 @@ pub fn json_to_bool(val: &Value) -> Result<bool> {
                 match i {
                     1 => Ok(true),
                     0 => Ok(false),
-                    other => Err(anyhow!("Cannot convert number {other} to boolean (expected 0 or 1)")),
+                    other => Err(anyhow!(
+                        "Cannot convert number {other} to boolean (expected 0 or 1)"
+                    )),
                 }
             } else {
                 Err(anyhow!("Cannot convert floating number to boolean"))

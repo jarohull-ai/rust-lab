@@ -32,7 +32,7 @@
       "id": "logger",
       "kind": "log_output",
       "config": {
-        "text": "Plik został pomyślnie przetworzony i zapisany do data/output.txt!"
+        "text": "The file was processed successfully and saved to data/output.txt!"
       },
       "after": ["write"]
     }

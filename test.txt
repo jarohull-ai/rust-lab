@@ -1,1 +1,1 @@
-Witaj w Rust Lab! To jest test odczytu pliku.
+Welcome to Rust Lab! This is a file-reading test.

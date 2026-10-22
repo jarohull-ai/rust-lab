@@ -20,7 +20,57 @@ pub fn sanitize_ident(s: &str) -> String {
     if ident.is_empty() {
         ident.push('_');
     }
+    if matches!(
+        ident.as_str(),
+        "as" | "break"
+            | "const"
+            | "continue"
+            | "crate"
+            | "else"
+            | "enum"
+            | "extern"
+            | "false"
+            | "fn"
+            | "for"
+            | "if"
+            | "impl"
+            | "in"
+            | "let"
+            | "loop"
+            | "match"
+            | "mod"
+            | "move"
+            | "mut"
+            | "pub"
+            | "ref"
+            | "return"
+            | "self"
+            | "Self"
+            | "static"
+            | "struct"
+            | "super"
+            | "trait"
+            | "true"
+            | "type"
+            | "unsafe"
+            | "use"
+            | "where"
+            | "while"
+            | "async"
+            | "await"
+            | "dyn"
+    ) {
+        ident.insert(0, '_');
+    }
     ident
+}
+
+fn rust_string_literal(value: &str) -> String {
+    format!("{value:?}")
+}
+
+fn rust_comment(value: &str) -> String {
+    value.replace(['\r', '\n'], " ")
 }
 
 /// Computes reachable nodes from a starting node ID following data edges, condition branches, and `after` lists.
@@ -299,26 +349,43 @@ pub fn json_parse(raw: &str, path: Option<&str>) -> Result<Value> {
 }
 
 /// Generates code for a single node invocation.
-fn generate_node_call(node: &lab_node_sdk::NodeInstance, graph: &GraphSpec, indent: &str) -> String {
+fn generate_node_call(
+    node: &lab_node_sdk::NodeInstance,
+    graph: &GraphSpec,
+    indent: &str,
+) -> String {
     let id_ident = sanitize_ident(&node.id);
     // Find incoming edges
     let in_edges: HashMap<&str, (&str, &str)> = graph
         .edges
         .iter()
         .filter(|e| e.to.node == node.id)
-        .map(|e| (e.to.port.as_str(), (e.from.node.as_str(), e.from.port.as_str())))
+        .map(|e| {
+            (
+                e.to.port.as_str(),
+                (e.from.node.as_str(), e.from.port.as_str()),
+            )
+        })
         .collect();
 
     let mut out = String::new();
-    out.push_str(&format!("{indent}// 🚀 Node: '{}' [{}]\n", node.id, node.kind));
+    out.push_str(&format!(
+        "{indent}// 🚀 Node: '{}' [{}]\n",
+        rust_comment(&node.id),
+        rust_comment(&node.kind)
+    ));
 
     match node.kind.as_str() {
         "http_get" => {
             let url_expr = if let Some(&(src, sport)) = in_edges.get("url") {
                 format!("&{}_{}", sanitize_ident(src), sanitize_ident(sport))
             } else {
-                let u = node.config.get("url").and_then(|v| v.as_str()).unwrap_or("");
-                format!("\"{u}\"")
+                let u = node
+                    .config
+                    .get("url")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+                rust_string_literal(u)
             };
             out.push_str(&format!(
                 "{indent}let {id_ident}_body = nodes::http_get({url_expr}).await?;\n"
@@ -328,8 +395,12 @@ fn generate_node_call(node: &lab_node_sdk::NodeInstance, graph: &GraphSpec, inde
             let path_expr = if let Some(&(src, sport)) = in_edges.get("path") {
                 format!("&{}_{}", sanitize_ident(src), sanitize_ident(sport))
             } else {
-                let p = node.config.get("path").and_then(|v| v.as_str()).unwrap_or("");
-                format!("\"{p}\"")
+                let p = node
+                    .config
+                    .get("path")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+                rust_string_literal(p)
             };
             out.push_str(&format!(
                 "{indent}let {id_ident}_content = nodes::fs_read({path_expr})?;\n"
@@ -339,14 +410,22 @@ fn generate_node_call(node: &lab_node_sdk::NodeInstance, graph: &GraphSpec, inde
             let path_expr = if let Some(&(src, sport)) = in_edges.get("path") {
                 format!("&{}_{}", sanitize_ident(src), sanitize_ident(sport))
             } else {
-                let p = node.config.get("path").and_then(|v| v.as_str()).unwrap_or("");
-                format!("\"{p}\"")
+                let p = node
+                    .config
+                    .get("path")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+                rust_string_literal(p)
             };
             let content_expr = if let Some(&(src, sport)) = in_edges.get("content") {
                 format!("&{}_{}", sanitize_ident(src), sanitize_ident(sport))
             } else {
-                let c = node.config.get("content").and_then(|v| v.as_str()).unwrap_or("");
-                format!("\"{c}\"")
+                let c = node
+                    .config
+                    .get("content")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+                rust_string_literal(c)
             };
             out.push_str(&format!(
                 "{indent}nodes::fs_write({path_expr}, {content_expr})?;\n"
@@ -356,9 +435,13 @@ fn generate_node_call(node: &lab_node_sdk::NodeInstance, graph: &GraphSpec, inde
             let text_expr = if let Some(&(src, sport)) = in_edges.get("text") {
                 format!("&{}_{}", sanitize_ident(src), sanitize_ident(sport))
             } else {
-                let t = node.config.get("text").cloned().unwrap_or(serde_json::json!(""));
+                let t = node
+                    .config
+                    .get("text")
+                    .cloned()
+                    .unwrap_or(serde_json::json!(""));
                 match t {
-                    serde_json::Value::String(s) => format!("\"{s}\""),
+                    serde_json::Value::String(s) => rust_string_literal(&s),
                     other => format!("serde_json::json!({other})"),
                 }
             };
@@ -368,13 +451,21 @@ fn generate_node_call(node: &lab_node_sdk::NodeInstance, graph: &GraphSpec, inde
             let json_expr = if let Some(&(src, sport)) = in_edges.get("json_str") {
                 format!("&{}_{}", sanitize_ident(src), sanitize_ident(sport))
             } else {
-                let j = node.config.get("json_str").and_then(|v| v.as_str()).unwrap_or("{}");
+                let j = node
+                    .config
+                    .get("json_str")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("{}");
                 format!("{j:?}")
             };
             let path_expr = if let Some(&(src, sport)) = in_edges.get("path") {
-                format!("Some(&{}_{}[..])", sanitize_ident(src), sanitize_ident(sport))
+                format!(
+                    "Some(&{}_{}[..])",
+                    sanitize_ident(src),
+                    sanitize_ident(sport)
+                )
             } else if let Some(p) = node.config.get("path").and_then(|v| v.as_str()) {
-                format!("Some(\"{p}\")")
+                format!("Some({})", rust_string_literal(p))
             } else {
                 "None".to_string()
             };
@@ -386,13 +477,33 @@ fn generate_node_call(node: &lab_node_sdk::NodeInstance, graph: &GraphSpec, inde
             let text_expr = if let Some(&(src, sport)) = in_edges.get("text") {
                 format!("&{}_{}", sanitize_ident(src), sanitize_ident(sport))
             } else {
-                let t = node.config.get("text").and_then(|v| v.as_str()).unwrap_or("");
-                format!("\"{t}\"")
+                let t = node
+                    .config
+                    .get("text")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+                rust_string_literal(t)
             };
-            let trim = node.config.get("trim").and_then(|v| v.as_bool()).unwrap_or(true);
-            let collapse = node.config.get("remove_extra_whitespace").and_then(|v| v.as_bool()).unwrap_or(false);
-            let to_lower = node.config.get("to_lower").and_then(|v| v.as_bool()).unwrap_or(false);
-            let to_upper = node.config.get("to_upper").and_then(|v| v.as_bool()).unwrap_or(false);
+            let trim = node
+                .config
+                .get("trim")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(true);
+            let collapse = node
+                .config
+                .get("remove_extra_whitespace")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            let to_lower = node
+                .config
+                .get("to_lower")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            let to_upper = node
+                .config
+                .get("to_upper")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
             out.push_str(&format!(
                 "{indent}let {id_ident}_cleaned = nodes::text_clean({text_expr}, {trim}, {collapse}, {to_lower}, {to_upper})?;\n"
             ));
@@ -401,8 +512,12 @@ fn generate_node_call(node: &lab_node_sdk::NodeInstance, graph: &GraphSpec, inde
             let dur_expr = if let Some(&(src, sport)) = in_edges.get("duration") {
                 format!("&{}_{}", sanitize_ident(src), sanitize_ident(sport))
             } else {
-                let d = node.config.get("duration").and_then(|v| v.as_str()).unwrap_or("0ms");
-                format!("\"{d}\"")
+                let d = node
+                    .config
+                    .get("duration")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("0ms");
+                rust_string_literal(d)
             };
             out.push_str(&format!("{indent}nodes::delay({dur_expr}).await?;\n"));
         }
@@ -410,8 +525,12 @@ fn generate_node_call(node: &lab_node_sdk::NodeInstance, graph: &GraphSpec, inde
             let path_expr = if let Some(&(src, sport)) = in_edges.get("path") {
                 format!("&{}_{}", sanitize_ident(src), sanitize_ident(sport))
             } else {
-                let p = node.config.get("path").and_then(|v| v.as_str()).unwrap_or("");
-                format!("\"{p}\"")
+                let p = node
+                    .config
+                    .get("path")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+                rust_string_literal(p)
             };
             out.push_str(&format!(
                 "{indent}let {id_ident}_path = nodes::string_to_path({path_expr})?;\n"
@@ -421,7 +540,11 @@ fn generate_node_call(node: &lab_node_sdk::NodeInstance, graph: &GraphSpec, inde
             let val_expr = if let Some(&(src, sport)) = in_edges.get("value") {
                 format!("&{}_{}", sanitize_ident(src), sanitize_ident(sport))
             } else {
-                let v = node.config.get("value").cloned().unwrap_or(serde_json::json!(null));
+                let v = node
+                    .config
+                    .get("value")
+                    .cloned()
+                    .unwrap_or(serde_json::json!(null));
                 format!("&serde_json::json!({v})")
             };
             out.push_str(&format!(
@@ -432,7 +555,11 @@ fn generate_node_call(node: &lab_node_sdk::NodeInstance, graph: &GraphSpec, inde
             let val_expr = if let Some(&(src, sport)) = in_edges.get("value") {
                 format!("&{}_{}", sanitize_ident(src), sanitize_ident(sport))
             } else {
-                let v = node.config.get("value").cloned().unwrap_or(serde_json::json!(false));
+                let v = node
+                    .config
+                    .get("value")
+                    .cloned()
+                    .unwrap_or(serde_json::json!(false));
                 format!("&serde_json::json!({v})")
             };
             out.push_str(&format!(
@@ -451,8 +578,11 @@ pub fn generate_main_rs(graph: &GraphSpec, topo_order: &[String]) -> Result<Stri
         graph.nodes.iter().map(|n| (n.id.as_str(), n)).collect();
 
     // Check for condition nodes
-    let conditions: Vec<&lab_node_sdk::NodeInstance> =
-        graph.nodes.iter().filter(|n| n.kind == "condition").collect();
+    let conditions: Vec<&lab_node_sdk::NodeInstance> = graph
+        .nodes
+        .iter()
+        .filter(|n| n.kind == "condition")
+        .collect();
 
     let mut body = String::new();
 
@@ -467,8 +597,16 @@ pub fn generate_main_rs(graph: &GraphSpec, topo_order: &[String]) -> Result<Stri
         // Handle branching with reachability analysis for each condition
         // For simplicity with single condition:
         let cond = conditions[0];
-        let true_target = cond.config.get("true_branch").and_then(|v| v.as_str()).unwrap_or("");
-        let false_target = cond.config.get("false_branch").and_then(|v| v.as_str()).unwrap_or("");
+        let true_target = cond
+            .config
+            .get("true_branch")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        let false_target = cond
+            .config
+            .get("false_branch")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
 
         let reach_true = reachable_from(true_target, graph);
         let reach_false = reachable_from(false_target, graph);
@@ -485,10 +623,22 @@ pub fn generate_main_rs(graph: &GraphSpec, topo_order: &[String]) -> Result<Stri
         }
 
         // 2. Condition evaluation
-        let cond_val_expr = if let Some(edge) = graph.edges.iter().find(|e| e.to.node == cond.id && e.to.port == "value") {
-            format!("{}_{}", sanitize_ident(&edge.from.node), sanitize_ident(&edge.from.port))
+        let cond_val_expr = if let Some(edge) = graph
+            .edges
+            .iter()
+            .find(|e| e.to.node == cond.id && e.to.port == "value")
+        {
+            format!(
+                "{}_{}",
+                sanitize_ident(&edge.from.node),
+                sanitize_ident(&edge.from.port)
+            )
         } else {
-            let b = cond.config.get("value").and_then(|v| v.as_bool()).unwrap_or(false);
+            let b = cond
+                .config
+                .get("value")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
             format!("{b}")
         };
 
@@ -582,6 +732,24 @@ mod tests {
         assert_eq!(sanitize_ident("welcome-user"), "welcome_user");
         assert_eq!(sanitize_ident("123node"), "_123node");
         assert_eq!(sanitize_ident("node.out"), "node_out");
+        assert_eq!(sanitize_ident("match"), "_match");
+    }
+
+    #[test]
+    fn escapes_untrusted_strings_in_generated_rust() {
+        let graph: GraphSpec = serde_json::from_value(json!({
+            "graph_version": "0.1",
+            "nodes": [
+                {"id": "line\nbreak", "kind": "log_output", "config": {"text": "\"; panic!(\"injected\"); //"}}
+            ],
+            "edges": []
+        }))
+        .unwrap();
+        let code = generate_main_rs(&graph, &["line\nbreak".to_string()]).unwrap();
+
+        assert!(code.contains("// 🚀 Node: 'line break'"));
+        assert!(code.contains("\\\"; panic!(\\\"injected\\\"); //"));
+        assert!(!code.contains("log_output(\"\";"));
     }
 
     #[test]

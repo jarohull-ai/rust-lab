@@ -1,21 +1,33 @@
 import React, { useState } from 'react';
+import { useI18n } from '../i18n';
 import CodeMirror from '@uiw/react-codemirror';
 import { rust } from '@codemirror/lang-rust';
-import { ExportResponse } from '../types';
-import { Code2, Copy, Check, FileCode, Package, RefreshCw } from 'lucide-react';
+import { CompileResponse, ExportResponse } from '../types';
+import { Code2, Copy, Check, FileCode, Package, RefreshCw, Hammer, XCircle } from 'lucide-react';
 
 interface CodeViewProps {
   exportData: ExportResponse | null;
+  compileReport: CompileResponse | null;
   loading: boolean;
+  compiling: boolean;
   onRefresh: () => void;
+  onCompile: () => void;
 }
 
-export const CodeView: React.FC<CodeViewProps> = ({ exportData, loading, onRefresh }) => {
+export const CodeView: React.FC<CodeViewProps> = ({
+  exportData,
+  compileReport,
+  loading,
+  compiling,
+  onRefresh,
+  onCompile,
+}) => {
+  const { t } = useI18n();
   const [activeTab, setActiveTab] = useState<'main' | 'nodes' | 'cargo'>('main');
   const [copied, setCopied] = useState(false);
 
   const getCurrentCode = () => {
-    if (!exportData) return '// Construct a valid graph on the canvas to see generated Rust code.';
+    if (!exportData) return t('code.empty');
     switch (activeTab) {
       case 'main':
         return exportData.main_rs;
@@ -39,15 +51,25 @@ export const CodeView: React.FC<CodeViewProps> = ({ exportData, loading, onRefre
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-800 bg-slate-950/60">
         <div className="flex items-center gap-2">
           <Code2 className="w-4 h-4 text-cyan-400" />
-          <span className="font-semibold text-xs tracking-wide text-slate-100">Live Rust Code View</span>
+          <span className="font-semibold text-xs tracking-wide text-slate-100">{t('code.title')}</span>
         </div>
 
         <div className="flex items-center gap-1.5">
           <button
+            type="button"
+            onClick={onCompile}
+            disabled={compiling || !exportData}
+            className="flex items-center gap-1 rounded bg-cyan-600/15 px-2 py-1 text-[10px] font-semibold text-cyan-300 transition-colors hover:bg-cyan-600/25 disabled:opacity-40"
+            title={t('code.compileTitle')}
+          >
+            <Hammer className={`h-3 w-3 ${compiling ? 'animate-pulse' : ''}`} />
+            {compiling ? t('code.checking') : t('code.check')}
+          </button>
+          <button
             onClick={onRefresh}
             disabled={loading}
             className="p-1 rounded text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-colors disabled:opacity-40"
-            title="Refresh Code"
+            title={t('code.refresh')}
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
           </button>
@@ -59,17 +81,42 @@ export const CodeView: React.FC<CodeViewProps> = ({ exportData, loading, onRefre
             {copied ? (
               <>
                 <Check className="w-3 h-3 text-emerald-400" />
-                <span className="text-emerald-400">Copied</span>
+                <span className="text-emerald-400">{t('code.copied')}</span>
               </>
             ) : (
               <>
                 <Copy className="w-3 h-3" />
-                <span>Copy</span>
+                <span>{t('code.copy')}</span>
               </>
             )}
           </button>
         </div>
       </div>
+
+      {compileReport && (
+        <div
+          className={`border-b px-3 py-2 text-[10px] ${
+            compileReport.success
+              ? 'border-emerald-800 bg-emerald-950/40 text-emerald-300'
+              : 'border-rose-800 bg-rose-950/40 text-rose-200'
+          }`}
+          role="status"
+        >
+          <div className="flex items-center gap-1.5 font-semibold">
+            {compileReport.success ? (
+              <Check className="h-3.5 w-3.5" />
+            ) : (
+              <XCircle className="h-3.5 w-3.5" />
+            )}
+            {t(compileReport.success ? 'code.compileSuccess' : 'code.compileFailed')}
+          </div>
+          {!compileReport.success && (compileReport.stderr || compileReport.stdout) && (
+            <pre className="mt-1.5 max-h-28 overflow-auto whitespace-pre-wrap rounded bg-slate-950/70 p-2 font-mono text-[9px] leading-relaxed text-slate-300">
+              {compileReport.stderr || compileReport.stdout}
+            </pre>
+          )}
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex border-b border-slate-800 bg-slate-950/40 px-2 pt-1 gap-1">
@@ -128,8 +175,8 @@ export const CodeView: React.FC<CodeViewProps> = ({ exportData, loading, onRefre
       </div>
 
       <div className="p-2 border-t border-slate-800 text-[10px] text-slate-500 font-mono bg-slate-950/80 flex items-center justify-between">
-        <span>⚡ Real-time code compilation synced from canvas</span>
-        <span className="text-emerald-500">Standalone Project</span>
+        <span>{t('code.footer')}</span>
+        <span className="text-emerald-500">{t('code.standalone')}</span>
       </div>
     </div>
   );

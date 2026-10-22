@@ -2,7 +2,13 @@
 name = "runtime"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Graph validation, planning, execution, code generation, and tutoring for Rust Lab"
+publish = false
 
 [dependencies]
 lab-node-sdk = { path = "../lab-node-sdk" }
@@ -13,3 +19,4 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 thiserror = "1"
 anyhow.workspace = true
 async-trait = "0.1"
+seed-core.workspace = true

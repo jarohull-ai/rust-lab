@@ -3,7 +3,61 @@
 All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
+
+## [0.3.0] - 2026-10-20
+
+Public alpha candidate; not published to crates.io.
+
 ### Added
+- Official Rust logo on the welcome screen, application toolbar, and browser tab.
+- Portable `.rustlab.json` project files with browser autosave, Open/Save, and project naming.
+- Debounced 100-step graph Undo/Redo history with standard keyboard shortcuts.
+- Browser-generated Cargo ZIP downloads without server-side path access.
+- Real offline `cargo check` feedback in the generated Rust code panel.
+- Guided lessons for safe file reading and writing, bringing the course to five lessons.
+- Keyboard-accessible node palette, visible focus styling, and reduced-motion support.
+- Hardened Docker and Compose deployment for a contained local instance.
+- Real Cargo Workspace Lab with local project creation and public GitHub repository import.
+- Source tree and CodeMirror editor for supported Rust project files.
+- Public crates.io search and explicit dependency additions.
+- Confirmed Cargo Fetch followed by offline Check, Test, Run, Clippy, and Fmt commands.
+- Per-project Cargo cache and `trajectory.jsonl` execution records.
+- Runtime sandbox capability endpoint and localized UI readiness indicator.
+- Public-project documentation: contribution guide, support policy, code of conduct, security model,
+  roadmap, release process, and GitHub issue/PR templates.
+- GitHub Actions release gate for Rust, UI, and container builds plus monthly Dependabot updates.
+
+### Changed
+- Product positioning now presents Rust Lab as one Learn, Build, and Experiment environment.
+- Internal workspace crates are explicitly excluded from crates.io publishing until their public
+  API and package identities receive a separate review.
+- License files now consistently provide the declared `MIT OR Apache-2.0` choice.
+- Docker deployment limitations for Cargo Workspace execution are documented explicitly.
+- Local and CI verification now enforce Rust formatting and locked dependencies.
+
+### Security
+- The API now binds to `127.0.0.1` unless `RUST_LAB_HOST` is explicitly configured.
+- Untrusted graph content can no longer extend execution allowlists.
+- File reads now use an allowlist in addition to sensitive-path denial.
+- Execution has a 30-second timeout and requests have a 1 MiB body limit.
+- Server-side exports are confined to `target/exports/`.
+- Imported code executes only in Bubblewrap or a hardened Docker fallback; Cargo actions are
+  disabled when neither backend is ready.
+- Networked dependency Fetch is separated from offline execution and receives no host Cargo
+  credentials.
+- Public GitHub import is shallow, non-interactive, size-limited, and restricted to HTTPS GitHub
+  repository URLs.
+
+## [0.2.0] - 2026-10-19
+
+Local release candidate; not published to crates.io.
+
+### Added
+- SEED Tutor with deterministic `seed-core` concept matching and adaptive three-level hints.
+- Complete English/Polish UI switch with English as the canonical default language.
+- Three guided lessons with live criteria, successful-run checks, and browser-local progress.
+- First-run welcome screen with an immediate language choice and lesson entry point.
+- One-command local startup (`scripts/run-local.sh`) and release verification (`scripts/verify.sh`).
 - **Phase 5: Construction Mode (Cargo Project Generator)**:
   - Code generator module `crates/runtime/src/codegen.rs` converting `GraphSpec` into a standalone Cargo workspace.
   - Generates self-contained `src/nodes.rs` with clean public functions for used nodes.
@@ -31,9 +85,13 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - API spec rewritten to match the format the runtime actually reads (v0.2).
+- Product, API, runtime, and UI versions aligned at `0.2.0`.
+- Execution safety rules renamed from SEED Policy to Execution Policy so SEED refers only to the tutor.
+- Example and sample content normalized to English; Polish remains an explicit UI option.
 
 ### Fixed
 - Corrupted `json_parse`, `text_clean` and `nodes/mod.rs` sources; compiler warnings in `fs_read`/`fs_write`.
+- `json_parse` and `text_clean` configuration values are now visible and editable in the node UI.
 
 ## [0.1.0] - 2026-10-19
 ### Added

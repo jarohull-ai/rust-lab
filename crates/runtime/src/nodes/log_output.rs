@@ -35,4 +35,3 @@ impl ViperNode for LogOutputNode {
         Ok(HashMap::new())
     }
 }
-

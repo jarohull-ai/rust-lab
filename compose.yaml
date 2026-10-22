@@ -1,0 +1,20 @@
+services:
+  rust-lab:
+    build: .
+    ports:
+      - "127.0.0.1:3030:3030"
+    tmpfs:
+      - /tmp
+      - /opt/rust-lab/target
+      - /opt/rust-lab/output
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    init: true
+    pids_limit: 256
+    mem_limit: 1g
+    cpus: 2
+    stop_grace_period: 10s
+    restart: unless-stopped

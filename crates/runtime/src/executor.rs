@@ -28,12 +28,7 @@ impl Executor {
     }
 
     pub async fn execute(&self, graph: GraphSpec) -> Result<ExecutionReport> {
-        let mut policy = crate::seed::SeedPolicy::default_safe();
-        if let Some(security) = &graph.security {
-            if let Ok(extra) = serde_json::from_value::<crate::seed::SeedPolicy>(security.clone()) {
-                policy.merge_with(&extra);
-            }
-        }
+        let mut policy = crate::execution_policy::ExecutionPolicy::default_safe();
         policy.from_env();
         self.execute_with_policy(graph, &policy).await
     }
@@ -41,7 +36,7 @@ impl Executor {
     pub async fn execute_with_policy(
         &self,
         graph: GraphSpec,
-        policy: &crate::seed::SeedPolicy,
+        policy: &crate::execution_policy::ExecutionPolicy,
     ) -> Result<ExecutionReport> {
         // Topological order over data, condition and `after` edges: every node's
         // dependencies (including its condition, if it is a branch) come before it.
@@ -79,10 +74,10 @@ impl Executor {
 
             let inputs = self.collect_inputs(&graph, &id, &report.outputs)?;
 
-            // SEED Policy Guard: evaluate before execution
-            let verdict = crate::seed::evaluate_node_inputs(&node.kind, &inputs, policy);
-            if let crate::seed::SeedVerdict::Denied { reason, rule } = verdict {
-                return Err(anyhow!("SEED Veto [{rule}]: {reason}"));
+            let verdict =
+                crate::execution_policy::evaluate_node_inputs(&node.kind, &inputs, policy);
+            if let crate::execution_policy::PolicyVerdict::Denied { reason, rule } = verdict {
+                return Err(anyhow!("Execution policy denied [{rule}]: {reason}"));
             }
 
             for pin in spec.inputs.iter().filter(|p| p.required) {
@@ -164,13 +159,15 @@ impl Executor {
         for edge in graph.edges.iter().filter(|e| e.to.node == id) {
             // A source that was skipped (or produced no such port) simply contributes nothing;
             // the required-input check reports it if the pin was mandatory.
-            if let Some(val) = results
-                .get(&edge.from.node)
-                .and_then(|o| o.get(&edge.from.port).or_else(|| o.get(&edge.from.port.to_lowercase())))
-            {
+            if let Some(val) = results.get(&edge.from.node).and_then(|o| {
+                o.get(&edge.from.port)
+                    .or_else(|| o.get(&edge.from.port.to_lowercase()))
+            }) {
                 inputs.insert(edge.to.port.clone(), val.clone());
                 inputs.insert(edge.to.port.to_lowercase(), val.clone());
-                if edge.to.port.to_lowercase() == "file_path" || edge.to.port.to_lowercase() == "filepath" {
+                if edge.to.port.to_lowercase() == "file_path"
+                    || edge.to.port.to_lowercase() == "filepath"
+                {
                     inputs.insert("path".to_string(), val.clone());
                 }
             }
@@ -183,7 +180,7 @@ impl Executor {
 pub async fn execute_graph(
     graph: &Value,
     registry: &NodeRegistry,
-    policy: &crate::seed::SeedPolicy,
+    policy: &crate::execution_policy::ExecutionPolicy,
 ) -> Result<ExecutionReport> {
     let spec: GraphSpec = serde_json::from_value(graph.clone())
         .map_err(|e| anyhow!("Failed to deserialize graph: {e}"))?;
@@ -316,7 +313,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn seed_veto_rejects_evil_domain_http_get() {
+    async fn execution_policy_rejects_evil_domain_http_get() {
         let g = graph(json!({
             "graph_version": "0.1",
             "nodes": [
@@ -325,12 +322,12 @@ mod tests {
             "edges": []
         }));
         let err = executor().execute(g).await.unwrap_err().to_string();
-        assert!(err.contains("SEED Veto"), "{err}");
+        assert!(err.contains("Execution policy denied"), "{err}");
         assert!(err.contains("http_get.domain_allowlist"), "{err}");
     }
 
     #[tokio::test]
-    async fn seed_veto_rejects_absolute_path_fs_write() {
+    async fn execution_policy_rejects_absolute_path_fs_write() {
         let g = graph(json!({
             "graph_version": "0.1",
             "nodes": [
@@ -339,12 +336,12 @@ mod tests {
             "edges": []
         }));
         let err = executor().execute(g).await.unwrap_err().to_string();
-        assert!(err.contains("SEED Veto"), "{err}");
+        assert!(err.contains("Execution policy denied"), "{err}");
         assert!(err.contains("fs_write.absolute_path"), "{err}");
     }
 
     #[tokio::test]
-    async fn seed_veto_rejects_denied_read_path_fs_read() {
+    async fn execution_policy_rejects_absolute_path_fs_read() {
         let g = graph(json!({
             "graph_version": "0.1",
             "nodes": [
@@ -353,12 +350,12 @@ mod tests {
             "edges": []
         }));
         let err = executor().execute(g).await.unwrap_err().to_string();
-        assert!(err.contains("SEED Veto"), "{err}");
-        assert!(err.contains("fs_read.path_denylist"), "{err}");
+        assert!(err.contains("Execution policy denied"), "{err}");
+        assert!(err.contains("fs_read.absolute_path"), "{err}");
     }
 
     #[tokio::test]
-    async fn seed_policy_allows_extended_domain_from_graph_security() {
+    async fn execution_policy_ignores_domain_extensions_from_untrusted_graphs() {
         let g = graph(json!({
             "graph_version": "0.1",
             "security": {
@@ -369,8 +366,10 @@ mod tests {
             ],
             "edges": []
         }));
-        // Since custom-partner-api.org won't resolve in sandbox, we just verify SEED didn't veto it!
         let err = executor().execute(g).await.unwrap_err().to_string();
-        assert!(!err.contains("SEED Veto"), "SEED should not have vetoed allowed domain: {err}");
+        assert!(
+            err.contains("http_get.domain_allowlist"),
+            "Graph content must not relax the host execution policy: {err}"
+        );
     }
 }

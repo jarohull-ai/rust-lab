@@ -176,4 +176,3 @@ mod tests {
         assert!(PinType::Any.matches_value(&json!(null)));
     }
 }
-

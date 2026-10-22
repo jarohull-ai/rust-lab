@@ -64,4 +64,3 @@ impl ViperNode for FsWriteNode {
         Ok(HashMap::new())
     }
 }
-

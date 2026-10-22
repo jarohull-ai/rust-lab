@@ -1,4 +1,5 @@
 import React, { memo } from 'react';
+import { useI18n } from '../i18n';
 import { Handle, Position } from '@xyflow/react';
 import { NodeSpec, PIN_COLORS, PinType } from '../types';
 import {
@@ -44,6 +45,7 @@ const KIND_ICONS: Record<string, React.ReactNode> = {
 };
 
 export const CustomNode = memo(({ id, data }: CustomNodeProps) => {
+  const { t } = useI18n();
   const { kind, spec, config, status, outputValue, onConfigChange, onDelete } = data;
 
   const getBorderColor = () => {
@@ -55,6 +57,8 @@ export const CustomNode = memo(({ id, data }: CustomNodeProps) => {
 
   return (
     <div
+      role="group"
+      aria-label={t('node.ariaLabel', { id, kind })}
       className={`min-w-[240px] max-w-[320px] rounded-xl bg-slate-900/95 backdrop-blur-md border text-slate-200 shadow-xl transition-all duration-200 ${getBorderColor()}`}
     >
       {/* Node Header */}
@@ -67,12 +71,12 @@ export const CustomNode = memo(({ id, data }: CustomNodeProps) => {
             <div className="text-xs font-semibold tracking-wide text-slate-100 flex items-center gap-1.5">
               <span>{id}</span>
               {status === 'executed' && (
-                <span title="Executed successfully">
+                <span title={t('node.executed')}>
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
                 </span>
               )}
               {status === 'skipped' && (
-                <span title="Branch skipped">
+                <span title={t('node.skipped')}>
                   <SkipForward className="w-3.5 h-3.5 text-slate-400" />
                 </span>
               )}
@@ -82,9 +86,10 @@ export const CustomNode = memo(({ id, data }: CustomNodeProps) => {
         </div>
 
         <button
+          type="button"
           onClick={() => onDelete(id)}
           className="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
-          title="Delete Node"
+          title={t('node.delete')}
         >
           <Trash2 className="w-3.5 h-3.5" />
         </button>
@@ -95,7 +100,7 @@ export const CustomNode = memo(({ id, data }: CustomNodeProps) => {
         {/* Input Pins */}
         {spec && spec.inputs.length > 0 && (
           <div className="space-y-1.5">
-            <span className="text-[10px] uppercase font-bold tracking-wider text-slate-500">Inputs</span>
+            <span className="text-[10px] uppercase font-bold tracking-wider text-slate-500">{t('node.inputs')}</span>
             {spec.inputs.map((pin) => {
               const color = PIN_COLORS[pin.pin_type as PinType] || PIN_COLORS.any;
               return (
@@ -104,6 +109,7 @@ export const CustomNode = memo(({ id, data }: CustomNodeProps) => {
                     type="target"
                     position={Position.Left}
                     id={pin.name}
+                    aria-label={t('pin.input', { name: pin.name, type: pin.pin_type })}
                     style={{ backgroundColor: color.hex, left: -18 }}
                   />
                   <span
@@ -124,7 +130,7 @@ export const CustomNode = memo(({ id, data }: CustomNodeProps) => {
         <div className="space-y-2 pt-1 border-t border-slate-800/60">
           {kind === 'http_get' && (
             <div>
-              <label className="text-[10px] uppercase text-slate-400 font-semibold">URL Config</label>
+              <label className="text-[10px] uppercase text-slate-400 font-semibold">{t('node.urlConfig')}</label>
               <input
                 type="text"
                 value={config.url || ''}
@@ -137,7 +143,7 @@ export const CustomNode = memo(({ id, data }: CustomNodeProps) => {
 
           {kind === 'fs_read' && (
             <div>
-              <label className="text-[10px] uppercase text-slate-400 font-semibold">File Path (path)</label>
+              <label className="text-[10px] uppercase text-slate-400 font-semibold">{t('node.filePath')}</label>
               <input
                 type="text"
                 value={config.path || config.file_path || ''}
@@ -153,7 +159,7 @@ export const CustomNode = memo(({ id, data }: CustomNodeProps) => {
 
           {kind === 'fs_write' && (
             <div className="space-y-1">
-              <label className="text-[10px] uppercase text-slate-400 font-semibold">Path (path)</label>
+              <label className="text-[10px] uppercase text-slate-400 font-semibold">{t('node.path')}</label>
               <input
                 type="text"
                 value={config.path || config.file_path || ''}
@@ -169,12 +175,12 @@ export const CustomNode = memo(({ id, data }: CustomNodeProps) => {
 
           {kind === 'log_output' && (
             <div>
-              <label className="text-[10px] uppercase text-slate-400 font-semibold">Static Text</label>
+              <label className="text-[10px] uppercase text-slate-400 font-semibold">{t('node.staticText')}</label>
               <input
                 type="text"
                 value={config.text || ''}
                 onChange={(e) => onConfigChange(id, 'text', e.target.value)}
-                placeholder="Message to log..."
+                placeholder={t('node.messagePlaceholder')}
                 className="w-full text-xs px-2 py-1 rounded bg-slate-950 border border-slate-800 focus:border-emerald-500 outline-none text-slate-100"
               />
             </div>
@@ -184,7 +190,7 @@ export const CustomNode = memo(({ id, data }: CustomNodeProps) => {
             <div className="space-y-1.5">
               <div className="flex gap-2">
                 <div className="flex-1">
-                  <label className="text-[10px] uppercase text-emerald-400 font-semibold">True Node</label>
+                  <label className="text-[10px] uppercase text-emerald-400 font-semibold">{t('node.trueNode')}</label>
                   <input
                     type="text"
                     value={config.true_branch || ''}
@@ -194,7 +200,7 @@ export const CustomNode = memo(({ id, data }: CustomNodeProps) => {
                   />
                 </div>
                 <div className="flex-1">
-                  <label className="text-[10px] uppercase text-rose-400 font-semibold">False Node</label>
+                  <label className="text-[10px] uppercase text-rose-400 font-semibold">{t('node.falseNode')}</label>
                   <input
                     type="text"
                     value={config.false_branch || ''}
@@ -207,9 +213,38 @@ export const CustomNode = memo(({ id, data }: CustomNodeProps) => {
             </div>
           )}
 
+          {kind === 'json_parse' && (
+            <div className="space-y-1.5">
+              <div>
+                <label className="text-[10px] uppercase text-slate-400 font-semibold">
+                  {t('node.jsonText')}
+                </label>
+                <input
+                  type="text"
+                  value={config.json_str || ''}
+                  onChange={(e) => onConfigChange(id, 'json_str', e.target.value)}
+                  placeholder='{"enabled": true}'
+                  className="w-full text-xs font-mono px-2 py-1 rounded bg-slate-950 border border-slate-800 focus:border-amber-500 outline-none text-slate-100"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] uppercase text-slate-400 font-semibold">
+                  {t('node.jsonPath')}
+                </label>
+                <input
+                  type="text"
+                  value={config.path || ''}
+                  onChange={(e) => onConfigChange(id, 'path', e.target.value)}
+                  placeholder="data.items.0.name"
+                  className="w-full text-xs font-mono px-2 py-1 rounded bg-slate-950 border border-slate-800 focus:border-amber-500 outline-none text-slate-100"
+                />
+              </div>
+            </div>
+          )}
+
           {kind === 'delay' && (
             <div>
-              <label className="text-[10px] uppercase text-slate-400 font-semibold">Duration</label>
+              <label className="text-[10px] uppercase text-slate-400 font-semibold">{t('node.duration')}</label>
               <input
                 type="text"
                 value={config.duration || '200ms'}
@@ -222,8 +257,20 @@ export const CustomNode = memo(({ id, data }: CustomNodeProps) => {
 
           {kind === 'text_clean' && (
             <div className="space-y-1 text-[11px] text-slate-300">
+              <div className="pb-1">
+                <label className="text-[10px] uppercase text-slate-400 font-semibold">
+                  {t('node.staticText')}
+                </label>
+                <input
+                  type="text"
+                  value={config.text || ''}
+                  onChange={(e) => onConfigChange(id, 'text', e.target.value)}
+                  placeholder={t('node.messagePlaceholder')}
+                  className="w-full text-xs px-2 py-1 rounded bg-slate-950 border border-slate-800 focus:border-blue-500 outline-none text-slate-100"
+                />
+              </div>
               <div className="flex items-center justify-between">
-                <span>Trim:</span>
+                <span>{t('node.trim')}:</span>
                 <input
                   type="checkbox"
                   checked={config.trim !== false}
@@ -231,7 +278,7 @@ export const CustomNode = memo(({ id, data }: CustomNodeProps) => {
                 />
               </div>
               <div className="flex items-center justify-between">
-                <span>To Lowercase:</span>
+                <span>{t('node.lowercase')}:</span>
                 <input
                   type="checkbox"
                   checked={!!config.to_lower}
@@ -239,7 +286,7 @@ export const CustomNode = memo(({ id, data }: CustomNodeProps) => {
                 />
               </div>
               <div className="flex items-center justify-between">
-                <span>To Uppercase:</span>
+                <span>{t('node.uppercase')}:</span>
                 <input
                   type="checkbox"
                   checked={!!config.to_upper}
@@ -253,7 +300,7 @@ export const CustomNode = memo(({ id, data }: CustomNodeProps) => {
         {/* Output Pins */}
         {spec && spec.outputs.length > 0 && (
           <div className="space-y-1.5 pt-2 border-t border-slate-800/60">
-            <span className="text-[10px] uppercase font-bold tracking-wider text-slate-500">Outputs</span>
+            <span className="text-[10px] uppercase font-bold tracking-wider text-slate-500">{t('node.outputs')}</span>
             {spec.outputs.map((pin) => {
               const color = PIN_COLORS[pin.pin_type as PinType] || PIN_COLORS.any;
               return (
@@ -270,6 +317,7 @@ export const CustomNode = memo(({ id, data }: CustomNodeProps) => {
                     type="source"
                     position={Position.Right}
                     id={pin.name}
+                    aria-label={t('pin.output', { name: pin.name, type: pin.pin_type })}
                     style={{ backgroundColor: color.hex, right: -18 }}
                   />
                 </div>
@@ -281,7 +329,7 @@ export const CustomNode = memo(({ id, data }: CustomNodeProps) => {
         {/* Live Output Preview if executed */}
         {outputValue && (
           <div className="pt-2 border-t border-slate-800/60">
-            <span className="text-[10px] font-mono text-emerald-400 font-semibold block mb-1">Runtime Output:</span>
+            <span className="text-[10px] font-mono text-emerald-400 font-semibold block mb-1">{t('node.runtimeOutput')}:</span>
             <pre className="text-[10px] font-mono bg-slate-950 p-1.5 rounded border border-slate-800 text-slate-300 max-h-20 overflow-y-auto whitespace-pre-wrap">
               {JSON.stringify(outputValue, null, 2)}
             </pre>

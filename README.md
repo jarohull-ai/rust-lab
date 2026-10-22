@@ -1,150 +1,204 @@
-# 🚀 Rust Lab – The Arduino of Rust
+# Rust Lab
 
-**Visual Graph ↔ Real Rust Code ↔ Execution**  
-Hybrydowe środowisko do nauki, prototypowania i generowania produkcyjnego kodu w języku Rust.
+**Learn · Build · Experiment with Rust**
 
-> *"Move from Action → Modification → Implementation. Instead of fighting the compiler for hours, build working systems with atomic blocks, then dive into the code to understand why it works."*
+[![CI](https://github.com/jarohull-ai/rust-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/jarohull-ai/rust-lab/actions/workflows/ci.yml)
+[![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
+[![Rust](https://img.shields.io/badge/Rust-stable-orange.svg)](https://www.rust-lang.org/)
 
----
+Rust Lab is a local-first Rust learning and prototyping environment. Beginners can connect typed
+nodes and inspect the Rust they generate; experienced users can create or import real Cargo
+projects, edit source code, add public crates, and run Cargo commands in an isolated sandbox.
 
-## 📌 Project Status
+The canonical product and documentation language is English. Polish is available from the
+`EN / PL` switch in the application.
 
-- ✅ **Core Engine & Nodes** – 11 węzłów atomowych (I/O, konwersja, parsowanie, sterowanie).
-- ✅ **Execution Planner (DAG)** – Topologiczny resolver zależności danych oraz sterowania (`after`).
-- ✅ **Control Flow & Branching** – Węzeł `condition` z dynamicznym trasowaniem `__next__`/`__skip__` oraz inteligentnym przycinaniem nieaktywnych gałęzi (*branch pruning*).
-- ✅ **Typed Pins & Isolation** – Ścisła kontrola typów pinów (`String`, `FilePath`, `Json`, `Bool`, `Number`, `Any`) wraz z węzłami konwertującymi.
-- ✅ **Construction Mode (Codegen)** – Generator kompilowalnego, samodzielnego projektu Cargo (`Cargo.toml` + `src/main.rs` + `src/nodes.rs`) gotowego do `cargo run`.
-- ✅ **Visual Canvas (React Flow + CodeMirror)** – Interaktywny webowy edytor grafu, podgląd kodu Rusta na żywo w czasie rzeczywistym i konsola diagnostyczna.
-- ✅ **Copilot AI (SEED Rule Engine)** – Deterministyczny silnik rekomendacji i walidacji kontekstowej (0 kosztów LLM) zintegrowany z paskiem narzędzi UI.
-- ✅ **100% Green Test Suite** – 61/61 testów jednostkowych i integracyjnych, 0 ostrzeżeń `cargo clippy`.
+> **Public alpha candidate — v0.3.0.** Rust Lab is useful today, but its file format and Lab APIs
+> may still change before 1.0. It is not published on crates.io.
 
----
+## Why Rust Lab?
 
-## 🧱 Architecture
+Rust Lab joins three workflows that are normally split across unrelated tools:
 
-```
-rust-lab/
-├── crates/
-│   ├── lab-node-sdk/   # Core SDK: Trait ViperNode, NodeSpec, TypedPin, PinType
-│   ├── runtime/        # DAG Planner, Validator, Executor, Codegen, Copilot SEED Engine
-│   └── api/            # Axum HTTP Server (/api/*), testy integracyjne, static UI hosting
-├── ui/                 # React 19, @xyflow/react, CodeMirror (Rust syntax), Tailwind CSS v4
-├── examples/           # Gotowe do uruchomienia pliki grafów (JSON)
-└── data/               # Przestrzeń robocza na pliki wejściowe i wyjściowe
-```
+- **Learn:** five guided lessons, typed visual connections, immediate validation, and a local
+  deterministic SEED Tutor.
+- **Build:** convert a valid graph into readable Rust and export a standalone Cargo project.
+- **Experiment:** work with real Cargo projects, public GitHub repositories, and crates.io
+  dependencies without executing imported code directly on the host.
 
----
+No account, cloud service, API key, or LLM is required for the learning experience.
 
-## 🧩 11 Atomic Nodes
+## Quick start
 
-| Node | Kategoria | Wejścia (Inputs) | Wyjścia (Outputs) | Opis |
-|---|---|---|---|---|
-| `http_get` | I/O & Network | `url: String` *(req)* | `body: String`, `status: Number` | Asynchroniczne pobieranie zasobów po HTTP |
-| `fs_read` | I/O | `path: FilePath` *(req)* | `content: String` | Bezpieczny odczyt pliku tekstowego z dysku |
-| `fs_write` | I/O | `path: FilePath`, `content: String` | `bytes_written: Number` | Zapis przetworzonej treści do pliku |
-| `log_output` | Output | `text: Any` *(req)* | — | Wypisanie tekstu/obiektu na standardowe wyjście |
-| `json_parse` | Data | `json_str: Json/String`, `path: String` | `value: Json` | Parsowanie JSON i ekstrakcja wartości po kluczu kropkowym |
-| `text_clean` | Text | `text: String` *(req)* | `cleaned: String` | Usuwanie zbędnych spacji, kapitalizacja, trim |
-| `condition` | Control | `value: Bool` *(req)* | `result: Bool` | Warunkowe rozgałęzienie (`true_branch`, `false_branch`) |
-| `delay` | Control | `duration: String` *(req)* | — | Asynchroniczne uśpienie potoku (np. `500ms`, `2s`) |
-| `string_to_path` | Converter | `path: String` *(req)* | `path: FilePath` | Jawna walidacja i konwersja `String` na `FilePath` |
-| `json_to_string` | Converter | `value: Json` *(req)* | `text: String` | Bezpieczna ekstrakcja tekstu z wartości `Json` |
-| `json_to_bool` | Converter | `value: Json` *(req)* | `value: Bool` | Parsowanie flagi boolean z `Json` |
+### Requirements
 
----
+| Capability | Requirement |
+|---|---|
+| Graph editor, lessons, code generation | Rust stable, Node.js 22+, npm 10+ |
+| Offline Cargo `check/test/run/clippy/fmt` | Bubblewrap on Linux **or** a running Docker service |
+| Cargo dependency Fetch | A running Docker service and the local `rust:bookworm` image (`docker pull rust:bookworm`) |
+| Public GitHub import and crates.io search | Internet connection |
 
-## 💡 Copilot AI (SEED Rule Engine)
+Linux is the supported host platform for the v0.3.0 alpha. Other platforms can use the graph and
+learning features, but the Cargo sandbox has not yet passed its release gate there.
 
-Rust Lab wyposażony jest w **deterministyczny silnik reguł SEED**, który analizuje graf studenta w czasie rzeczywistym bez wysyłania danych do chmurowych LLM (0 kosztów, czas reakcji <1ms).
-
-Ikona żarówki (💡 **Copilot**) na pasku narzędzi dynamicznie sygnalizuje:
-1. **Reguła 1: Brakujące wejście** – Wykrywa brak wymaganych parametrów (`required`) i podpowiada wartość domyślną.
-2. **Reguła 2: Osierocony węzeł** – Ostrzega o węzłach pozostawionych na canvasie bez połączeń.
-3. **Reguła 3: Detekcja cyklu** – Blokuje pętle (DAG enforcement) zanim wywołają błąd w runtime.
-4. **Reguła 4: Type Mismatch** – Wykrywa niezgodność typów na krawędziach i wskazuje konkretny konwerter (np. `string_to_path`).
-5. **Reguła 5: Połączenie z węzła bez wyjścia** – Ostrzega przed próbą pobrania danych z węzłów czysto konsumenckich (np. `log_output`).
-6. **Reguła 6: Smart Next Step** – Rekomenduje logiczne kolejne węzły dla wiszących wyjść (np. `http_get.body` → `json_parse` lub `log_output`).
-
-Kliknięcie podpowiedzi w dymku automatycznie zaznacza i podświetla powiązany węzeł na canvasie.
-
----
-
-## 📂 Gotowe Przykłady Grafów (`examples/`)
-
-W katalogu `examples/` znajdują się przykładowe grafy gotowe do uruchomienia w CLI oraz wgrania do UI:
-
-- **`examples/web_scraper.json`**  
-  Potok Web Scraper: `http_get` (pobiera JSON z `httpbin.org`) → `json_parse` (wyciąga `slideshow.author`) → `json_to_string` → `text_clean` (uppercase) → `log_output`.
-- **`examples/file_pipeline.json`**  
-  Potok plikowy: `fs_read` (odczytuje `data/sample.txt`) → `text_clean` → `string_to_path` → `fs_write` (zapisuje oczyszczony tekst do `data/output.txt`) → `log_output`.
-- **`examples/http_pipeline.json`**  
-  Potok ekstrakcji danych z API z parsowaniem tytułu prezentacji.
-- **`examples/condition_delay.json`**  
-  Rozgałęzienie logiczne: sprawdzenie uprawnień `is_admin`, wykonanie asynchronicznego opóźnienia (`delay`) i przycięcie gałęzi alternatywnej.
-
----
-
-## ⚡ Szybki Start
-
-### 1. Uruchomienie Visual Canvas (Web UI + API)
+From a fresh checkout:
 
 ```bash
-# Uruchomienie serwera API (serwuje endpointy oraz zbudowany interfejs webowy):
+./scripts/run-local.sh
+```
+
+Open <http://127.0.0.1:3030>. Use another port when needed:
+
+```bash
+PORT=3031 ./scripts/run-local.sh
+```
+
+The startup script checks the required tools, installs the locked UI dependencies when necessary,
+builds the interface, and starts the API on loopback only.
+
+## Product modes
+
+### Graph — learn visually
+
+- Build typed data-flow graphs with 11 nodes for I/O, parsing, conversion, control flow, and output.
+- Catch missing inputs, incompatible types, invalid ports, and cycles before execution.
+- Follow five guided lessons with live completion checks and browser-local progress.
+- Receive adaptive SEED Tutor hints without sending code to an external model.
+- Inspect generated Rust, run a real offline `cargo check`, and export a standalone Cargo ZIP.
+- Save portable `.rustlab.json` projects with autosave and Undo/Redo.
+
+### Lab — prototype with real Cargo projects
+
+1. Create a binary package or import a public `https://github.com/OWNER/REPOSITORY` URL.
+2. Browse and edit supported Rust, TOML, Markdown, JSON, YAML, and text files.
+3. Search crates.io and add an explicitly selected dependency version.
+4. Use **Fetch** to populate a project-specific dependency cache.
+5. Run **Check**, **Test**, **Run**, **Clippy**, or **Fmt** offline in an isolated sandbox.
+
+The Lab displays sandbox readiness before commands can be selected. Every dependency change and
+Cargo command requires explicit confirmation. Private GitHub repositories and crates.io publishing
+credentials are intentionally outside this alpha.
+
+## Safety model
+
+Rust Lab treats imported repositories, dependencies, generated code, and model-produced content as
+untrusted.
+
+- Imported Cargo code is never executed directly by the Rust Lab process.
+- Offline commands prefer Bubblewrap and fall back to a hardened Docker container.
+- The execution sandbox has no network, drops Linux capabilities, applies resource and time limits,
+  and sees only the selected project and its dedicated dependency cache.
+- Dependency Fetch uses a separate Docker phase with network access but without host Cargo
+  credentials or external Git transport.
+- Graph HTTP requests use an administrator-controlled domain allowlist.
+- Graph file access is restricted to configured read/write directories.
+- API requests are limited to 1 MiB; graph and Cargo execution have fixed timeouts.
+- Cargo approvals and outcomes are recorded in a per-project `trajectory.jsonl` outside Git.
+
+Read [SECURITY.md](SECURITY.md) before exposing Rust Lab beyond your own machine, and see the full
+[security model](docs/SECURITY_MODEL.md) for boundaries and non-goals.
+
+## Docker deployment
+
+```bash
+docker compose up --build
+```
+
+Compose publishes only on `127.0.0.1:3030` and runs Rust Lab as an unprivileged user without Linux
+capabilities. It fully supports Graph mode, lessons, code generation, and browser exports.
+
+The Compose container intentionally receives neither the host Docker socket nor additional
+namespace privileges. Therefore real Cargo execution in Lab mode is reported as unavailable in the
+standard Compose deployment. Mounting the Docker socket would grant excessive host control and is
+not a supported workaround. Run Rust Lab directly on a Linux host for the complete v0.3.0 Lab
+experience.
+
+## Developer workflow
+
+For frontend development:
+
+```bash
+# Terminal 1
 cargo run -p api
 
-# Otwórz przeglądarkę pod adresem:
-# 👉 http://localhost:3030
+# Terminal 2
+npm --prefix ui ci
+npm --prefix ui run dev
 ```
 
-Dla pracy deweloperskiej z hot-reloadem frontendu (Vite):
-```bash
-# Terminal 1: Backend API
-cargo run -p api
+Run the same gate used by CI:
 
-# Terminal 2: Vite Dev Server
-cd ui && npm run dev
-# 👉 http://localhost:5173
+```bash
+./scripts/verify.sh
 ```
 
-### 2. Uruchomienie grafu przez CLI
+It checks formatting, all Rust tests, Clippy with warnings denied, UI tests, and the production UI
+build. Contribution instructions are in [CONTRIBUTING.md](CONTRIBUTING.md). Common setup failures
+are covered in [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
+
+## Command-line workflows
+
+Run a graph:
 
 ```bash
-# Uruchomienie potoku plikowego
 cargo run -p runtime -- examples/file_pipeline.json
-
-# Uruchomienie potoku web scrapera
 cargo run -p runtime -- examples/web_scraper.json
 ```
 
-### 3. Eksport do samodzielnego projektu Cargo (Construction Mode)
+Export a standalone Cargo project:
 
 ```bash
-# Wygenerowanie kompletnego projektu w katalogu ./my-app
 cargo run -p runtime -- --export ./my-app examples/web_scraper.json
-
-# Uruchomienie wygenerowanego kodu w 100% natywnym Rust/Cargo
 cd my-app
 cargo run
 ```
 
----
+## Architecture
 
-## 🧪 Testy i Jakość Kodu
-
-Wszystkie crate'y są w pełni przetestowane pod kątem zgodności specyfikacji, planowania DAG, walidacji typów i reguł Copilota:
-
-```bash
-# Uruchomienie wszystkich 61 testów w workspace
-cargo test
-
-# Weryfikacja lintera Clippy (0 ostrzeżeń)
-cargo clippy --all-targets --all-features -- -D warnings
+```text
+rust-lab/
+├── crates/
+│   ├── lab-node-sdk/   # graph contracts, node trait, typed pins
+│   ├── runtime/        # validator, planner, executor, codegen, tutor
+│   └── api/            # Axum API, workspace isolation, static UI hosting
+├── ui/                 # React, React Flow, CodeMirror, EN/PL localization
+├── docs/               # specifications, decisions, security, user guidance
+├── scripts/            # one-command local start and release verification
+├── examples/           # runnable graph JSON files
+└── data/               # local sample input and output
 ```
 
----
+The public API contract is documented in [docs/specs/api-spec.md](docs/specs/api-spec.md). Design
+decisions live in [docs/adr](docs/adr).
 
-## 📄 Licencja
+## Current limitations
 
-Projekt udostępniany jest na warunkach licencji:
-- MIT License ([LICENSE-MIT](LICENSE) lub http://opensource.org/licenses/MIT)
-- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) lub http://www.apache.org/licenses/LICENSE-2.0)
+- The supported release host is Linux.
+- GitHub import supports public HTTPS repositories only.
+- crates.io integration supports search and dependency addition, not authentication or publishing.
+- Lab projects are stored locally under `target/rust-lab-workspaces/`; project management and
+  migrations are still evolving.
+- Rust Lab is a single-user local tool. It is not hardened as a multi-tenant remote code service.
+
+See the [roadmap](docs/ROADMAP.md) for the deliberately limited post-alpha scope.
+
+## Community and support
+
+- Report reproducible bugs through [GitHub Issues](https://github.com/jarohull-ai/rust-lab/issues).
+- Use the feature request template for product proposals.
+- Report vulnerabilities privately according to [SECURITY.md](SECURITY.md).
+- Read [SUPPORT.md](SUPPORT.md) for the support boundary.
+
+## License
+
+Rust Lab is dual-licensed under either:
+
+- [Apache License, Version 2.0](LICENSE-APACHE), or
+- [MIT License](LICENSE-MIT),
+
+at your option.
+
+The official Rust logo is used unmodified under CC BY 4.0. Rust Lab is an independent project and
+is not affiliated with or endorsed by the Rust Project or Rust Foundation. See
+[NOTICE.md](NOTICE.md) for attribution and trademark information.

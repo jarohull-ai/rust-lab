@@ -1,17 +1,28 @@
 {
-  "name": "ui",
-  "version": "1.0.0",
+  "name": "rust-lab-ui",
+  "version": "0.3.0",
+  "private": true,
   "type": "module",
-  "description": "",
-  "main": "index.js",
+  "description": "Local-first Rust learning and Cargo prototyping interface",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "test": "node --experimental-strip-types --test tests/*.test.ts",
     "preview": "vite preview"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": ["rust", "cargo", "education", "visual-programming"],
+  "author": "Rust Lab Contributors",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jarohull-ai/rust-lab.git"
+  },
+  "homepage": "https://github.com/jarohull-ai/rust-lab",
+  "bugs": "https://github.com/jarohull-ai/rust-lab/issues",
+  "engines": {
+    "node": ">=22",
+    "npm": ">=10"
+  },
+  "license": "MIT OR Apache-2.0",
   "dependencies": {
     "@codemirror/lang-rust": "^6.0.2",
     "@uiw/react-codemirror": "^4.25.12",
